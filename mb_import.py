@@ -2,8 +2,8 @@ import argparse
 
 import musicbrainzngs as mb
 
-from gqlquery import submit_query
-from trompamb import transform_musicbrainz
+from cequery.connection import submit_query
+from cequery import transform_musicbrainz
 
 mb.set_useragent('TROMPA', '0.1')
 
@@ -17,14 +17,16 @@ def transform_mb_work_to_gql(work):
 
 
 def import_artist(artist_mbid):
-    artist = mb.get_artist_by_id(artist_mbid, includes=["url-rels"])['artist']
-    query = transform_musicbrainz.transform_artist(artist)
-    print(query)
+    artist = mb.get_artist_by_id(artist_mbid, includes=["url-rels"])["artist"]
+    query = transform_musicbrainz.transform_musicbrainz_artist(artist)
     submit_query(query)
 
 
 def import_work(work_mbid):
-    pass
+    work = mb.get_artist_by_id(work_mbid, includes=["url-rels"])["work"]
+    query = transform_musicbrainz.transform_work(work)
+    print(work)
+    submit_query(query)
 
 
 def main(artist_mbid=None, work_mbid=None):

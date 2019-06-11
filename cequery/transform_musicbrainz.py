@@ -3,7 +3,7 @@
 # mutations with their DSLs yet, so we just do it manually
 import json
 
-from trompamb import wikidata
+from cequery import wikidata
 
 MUTATION = '''
 mutation {{
@@ -40,7 +40,7 @@ def get_wikidata_url(mb_artist):
     return None
 
 
-def transform_artist(mb_artist):
+def transform_musicbrainz_artist(mb_artist):
     """Transform a musicbrainz artist to a CreatePerson mutation for the CE"""
 
     # possible languages: en,es,ca,nl,de,fr
