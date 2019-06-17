@@ -1,12 +1,22 @@
+import configparser
+
 import requests
 
 from cequery import query
 
+config = configparser.ConfigParser()
+config.read('import.ini')
+
 
 def submit_query(querystr: str):
     q = {"query": querystr}
-    r = requests.post("http://localhost:4000", json=q)
-    r.raise_for_status()
+    server = config["import"]["server"]
+    r = requests.post(server, json=q)
+    try:
+        r.raise_for_status()
+    except requests.exceptions.HTTPError:
+        print("error")
+        print(r.json())
     return r.json()
 
 
