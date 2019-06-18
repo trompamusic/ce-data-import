@@ -17,7 +17,14 @@ def submit_query(querystr: str):
     except requests.exceptions.HTTPError:
         print("error")
         print(r.json())
+        print(querystr)
     return r.json()
+
+
+def get_digital_document_by_source(source):
+    querystr = query.query_document_by_source(source)
+    resp = submit_query(querystr)
+    return resp["data"]["DigitalDocument"]
 
 
 def get_person_by_source(source):

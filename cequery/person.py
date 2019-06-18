@@ -1,9 +1,11 @@
 # Transform items to GraphQL queries
 # Python GQL libraries (quiz, gql) don't appear to support
 # mutations with their DSLs yet, so we just do it manually
-import json
 
-from cequery import wikidata
+
+from cequery import StringConstant, make_parameters
+
+from cequery import wikipedia
 
 MUTATION = '''
 mutation {{
@@ -16,19 +18,9 @@ CreatePerson(
 {parameters}
 ) {{
   identifier
+  name
 }}
 '''
-
-
-class StringConstant:
-    """Some values in GraphQL are constants, not strings, and so they shouldn't
-    be encoded or have quotes put around them. Use this to represent a constant
-    and it won't be quoted in the query"""
-    def __init__(self, value):
-        self.value = value
-
-    def __str__(self):
-        return self.value
 
 
 def get_wikidata_url(mb_artist):
@@ -40,6 +32,12 @@ def get_wikidata_url(mb_artist):
     return None
 
 
+def transform_data_artist(composer_args):
+    """Transform data from scraped composers data file"""
+
+    return mutation_artist(**composer_args)
+
+
 def transform_musicbrainz_artist(mb_artist):
     """Transform a musicbrainz artist to a CreatePerson mutation for the CE"""
 
@@ -48,7 +46,7 @@ def transform_musicbrainz_artist(mb_artist):
     wikidata_url = get_wikidata_url(mb_artist)
     description = ""
     if wikidata_url:
-        description = wikidata.get_description_for_wikidata(wikidata_url)
+        description = wikipedia.get_description_for_wikidata(wikidata_url)
 
     artist_name = mb_artist["name"]
     args = {
@@ -64,18 +62,6 @@ def transform_musicbrainz_artist(mb_artist):
         "language": StringConstant("en"),
             }
     return mutation_artist(**args)
-
-
-def make_parameters(**kwargs):
-    encoder = json.JSONEncoder()
-    parts = []
-    for k, v in kwargs.items():
-        if isinstance(v, StringConstant):
-            value = v.value
-        else:
-            value = encoder.encode(v)
-        parts.append("{}: {}".format(k, value))
-    return "\n".join(parts)
 
 
 def mutation_artist(**kwargs):
