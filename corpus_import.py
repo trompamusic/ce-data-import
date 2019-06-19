@@ -186,41 +186,27 @@ def import_or_update_work(work, artist_data):
     add_documents(work_identifier, work)
 
 
-def import_cpdl(cpdl_file, artist_file):
-    with open(cpdl_file) as fp:
+def main(data_file=None, artist_file=None, limit=None):
+    logger.info("connected to %s", connection.config["import"]["server"])
+
+    with open(data_file) as fp:
         data = json.load(fp)
     with open(artist_file) as fp:
         artist_data = json.load(fp)
 
-    #keys = list(data.keys())
-    for k, work in data.items():
-    #for k in keys[:5]:
+    keys = list(data.keys())
+    if limit:
+        keys = keys[:limit]
+    for k in keys:
         work = data[k]
         import_or_update_work(work, artist_data)
 
 
-def import_imslp(imslp_file, artist_file):
-    with open(imslp_file) as fp:
-        data = json.load(fp)
-
-    for k, work in data.items():
-        import_work_if_absent(work)
-
-
-def main(imslp_file=None, cpdl_file=None, artist_file=None):
-    logger.info("connected to %s", connection.config["import"]["server"])
-    if imslp_file:
-        import_imslp(imslp_file, artist_file)
-    elif cpdl_file:
-        import_cpdl(cpdl_file, artist_file)
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--imslp', required=False, help='IMSLP data file')
-    group.add_argument('--cpdl', required=False, help='CPDL data file')
+    parser.add_argument('--data', required=True, help='Work data file')
     parser.add_argument('--artist', required=True, help='Artist/composer data file')
+    parser.add_argument('--limit', type=int, required=False, help='Only import this many works')
 
     args = parser.parse_args()
-    main(args.imslp, args.cpdl, args.artist)
+    main(args.data, args.artist, args.limit)
