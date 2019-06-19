@@ -76,14 +76,20 @@ def make_documents_broad_match(document_ids):
     """If a work has more than one score, the documents are broadMatches of each other. We should
     create relations between *all permutations* of these documents."""
     for from_id, to_id in itertools.permutations(document_ids, 2):
-        query = cequery.document.get_query_document_broad_match(from_id, to_id)
+        query = cequery.document.get_query_remove_document_broad_match(from_id, to_id)
+        connection.submit_query(query)
+
+        query = cequery.document.get_query_add_document_broad_match(from_id, to_id)
         connection.submit_query(query)
 
 
-def join_work_documents(work_identifier, document_identifiers):
+def join_work_and_documents(work_identifier, document_identifiers):
     """Mark that a score is the subjectOf a work"""
     for d_id in document_identifiers:
-        query = cequery.document.get_query_link_document_composition(work_identifier, d_id)
+        query = cequery.document.get_query_remove_document_composition(work_identifier, d_id)
+        connection.submit_query(query)
+
+        query = cequery.document.get_query_add_document_composition(work_identifier, d_id)
         connection.submit_query(query)
 
 
@@ -115,10 +121,16 @@ def import_or_update_wikipedia_composer(wikipedia_url):
 
 def join_work_composer(work_identifier, composer_identifier):
     """Say that a composer wrote a score"""
-    # TODO: This should only be done once
     logger.info("joining work %s and composer %s", work_identifier, composer_identifier)
+
+    # Remove any link that is already there (We'd have to do a query anyway to check if it exists,
+    # so just do it unconditionally)
+    # TODO: Could select this query when getting the work originally to check if we update it
+    query = cequery.work.get_query_remove_composition_author(work_identifier, composer_identifier)
+    connection.submit_query(query)
+
     query = cequery.work.get_query_add_composition_author(work_identifier, composer_identifier)
-    resp = connection.submit_query(query)
+    connection.submit_query(query)
     logger.info("done")
 
 

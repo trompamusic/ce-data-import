@@ -47,9 +47,34 @@ AddCreativeWorkInterfaceLegalPerson(
 }}
 '''
 
+REMOVE_COMPOSITION_AUTHOR = '''
+RemoveCreativeWorkInterfaceLegalPerson(
+  from: {{identifier: "{composition_id}" type:MusicComposition}}
+  to: {{identifier: "{composer_id}" type: Person}}
+  field: author 
+)
+{{
+    from {{
+        ... on CreativeWork {{
+            identifier, contributor
+    }}
+  }}
+  to {{
+        ... on Person {{
+            identifier, contributor
+    }}
+  }}
+}}
+'''
+
 
 def get_query_add_composition_author(composition_id, composer_id):
     query = ADD_COMPOSITION_AUTHOR.format(composition_id=composition_id, composer_id=composer_id)
+    return MUTATION.format(mutation=query)
+
+
+def get_query_remove_composition_author(composition_id, composer_id):
+    query = REMOVE_COMPOSITION_AUTHOR.format(composition_id=composition_id, composer_id=composer_id)
     return MUTATION.format(mutation=query)
 
 

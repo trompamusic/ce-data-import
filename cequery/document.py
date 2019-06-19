@@ -21,8 +21,37 @@ AddDigitalDocumentBroadMatch(
 }}
 '''
 
+REMOVE_DIGITAL_DOCUMENT_BROAD_MATCH = '''
+RemoveDigitalDocumentBroadMatch(
+  from: {{identifier: "{from_document_id}" }}
+  to: {{identifier: "{to_document_id}" }}
+) {{
+  from {{
+    identifier
+  }}
+  to {{
+    identifier
+  }}
+}}
+'''
+
 ADD_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION = '''
 AddThingInterfaceCreativeWorkInterface(
+    from: {{identifier: "{document_id}" type:DigitalDocument}}
+    to: {{identifier: "{composition_id}" type:MusicComposition}}
+    field: subjectOf
+) {{
+    from {{
+      __typename
+    }}
+    to {{
+      __typename
+    }}
+}}
+'''
+
+REMOVE_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION = '''
+RemoveThingInterfaceCreativeWorkInterface(
     from: {{identifier: "{document_id}" type:DigitalDocument}}
     to: {{identifier: "{composition_id}" type:MusicComposition}}
     field: subjectOf
@@ -55,13 +84,23 @@ UpdateDigitalDocument(
 '''
 
 
-def get_query_document_broad_match(from_document_id, to_document_id):
+def get_query_add_document_broad_match(from_document_id, to_document_id):
     query = ADD_DIGITAL_DOCUMENT_BROAD_MATCH.format(from_document_id=from_document_id, to_document_id=to_document_id)
     return MUTATION.format(mutation=query)
 
 
-def get_query_link_document_composition(composition_id, document_id):
+def get_query_remove_document_broad_match(from_document_id, to_document_id):
+    query = REMOVE_DIGITAL_DOCUMENT_BROAD_MATCH.format(from_document_id=from_document_id, to_document_id=to_document_id)
+    return MUTATION.format(mutation=query)
+
+
+def get_query_add_document_composition(composition_id, document_id):
     query = ADD_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
+    return MUTATION.format(mutation=query)
+
+
+def get_query_remove_document_composition(composition_id, document_id):
+    query = REMOVE_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
     return MUTATION.format(mutation=query)
 
 
