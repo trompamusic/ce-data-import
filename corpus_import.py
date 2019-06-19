@@ -26,34 +26,29 @@ logger.addHandler(ch)
 def add_documents(work_identifier, work):
     # contributor, creator, description, format, language, source, subject, title, name, relation, license
     logger.info("Adding documents for work...")
-    relations = work["Relation"]
-    if not isinstance(relations, list):
+    work_relations = work["Relation"]
+    documents = []
+    for r in work_relations:
         doc = {"contributor": work["Contributor"],
-               "creator": work["Publisher"]["Name"],
-               "description": "Transcription of {}".format(work["Title"]),
-               "format": work["Format"],
+               "creator": r["Publisher"],
+               "description": r["Description"],
+               "format": r["Format"],
                "language": StringConstant(work["Language"]),
-               "source": work["Relation"],
+               "source": r["File_url"],
                "subject": work["Subject"],
                "title": work["Title"],
                "name": work["Title"],
-               "relation": work["Relation"],
-               "license": work["Rights"]}
-        relations = [doc]
-    else:
-        # If this is the imslp doc
-        pass
-
-    #for r in relations:
-    #    r["Contributor"] = work["Contributor"]
+               "relation": r["File_url"],
+               "license": r["License"]}
+        documents.append(doc)
 
     document_identifiers = []
-    for r in relations:
-        doc_id = add_or_get_digital_document(r)
+    for d in documents:
+        doc_id = add_or_get_digital_document(d)
         document_identifiers.append(doc_id)
 
     make_documents_broad_match(document_identifiers)
-    join_work_documents(work_identifier, document_identifiers)
+    join_work_and_documents(work_identifier, document_identifiers)
 
 
 def add_or_get_digital_document(document):
@@ -138,15 +133,11 @@ def _get_composer_data(work, artist_data):
     # required fields: contributor, creator, description, format, language, source, subject, name, title
 
     author = work["Creator"]["Name"]
-    #artist = artist_data.get(author, {})
-    #source = artist.get("Source")
     source = work["Creator"]["url"]
 
     url_parts = urlparse(source)
     creator_url = "{}://{}".format(url_parts.scheme, url_parts.netloc)
     biography = "an Artist"
-    #if artist.get("Biography"):
-    #    biography = artist.get("Biography")
 
     data = {"contributor": work["Contributor"],
             "creator": creator_url,
