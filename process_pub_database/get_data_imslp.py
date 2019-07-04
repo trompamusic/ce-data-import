@@ -7,33 +7,27 @@ import json
 import urllib.request
 import unicodedata
 
-def progress(count, total, suffix=''):
-    """
-    Helper function to print a progress bar.
+from utils import *
 
+def find_composer(bs_file):
+    composer = bs_file.find_all(text = 'Composer\n')[0].parent.parent.find('td').contents[0]
 
-    """
+    composer_name = composer.getText()
 
-    bar_len = 60
-    filled_len = int(round(bar_len * count / float(total)))
+    composer_url = 'https://imslp.org' + composer['href']
 
-    percents = round(100.0 * count / float(total), 1)
-    bar = '=' * filled_len + '-' * (bar_len - filled_len)
+    composer_name = composer_name.split(',')[1][1:]+' '+ composer_name.split(',')[0]
 
-    sys.stdout.write('[%s] %s%s ...%s\r' % (bar, percents, '%', suffix))
-    sys.stdout.flush()
+    composer_name = unicodedata.normalize('NFKC', composer_name).strip()
 
-def write_json(list_of_works, file_name):
-    json_file = open(file_name, 'w') 
-    json.dump(list_of_works, json_file, indent=4, separators=(',', ': '), sort_keys=True)
-    json_file.close()
+    composer = {'Name' : composer_name, 'url': composer_url}
 
+    return composer
 
 def main():
 
+    list_of_titles, md = get_list_of_titles('https://imslp.org/api.php', "For unaccompanied chorus")
 
-    md = mediawiki.MediaWiki(url='https://imslp.org/api.php',rate_limit=True)
-    list_of_titles = md.categorymembers("For unaccompanied chorus",results=10000,subcategories=True)[0]
 
     print('Info retrieved')
 
@@ -50,33 +44,26 @@ def main():
 
     composer_dict = {}
 
-
-
-
     for title in list_of_titles:
         count_total+=1
 
         try:
             # title = 'Et respondens Iesus dixit illis (Lange, Gregor)'
 
-            ret_page = md.page(title)
-            page_text = ret_page.html
-            if ('XML' in page_text) or ('MusicXML' in page_text):
+            process, source = check_mxl(md, title, ['MusicXML', 'XML'])
+
+            if process:
                 dict_file = {}
 
-                bs_file = bs(page_text, features="lxml")
-                source = 'https:'+ret_page.url
-                composer = bs_file.find_all(text = 'Composer\n')[0].parent.parent.find('td').contents[0]
+                title_str = read_source('https:' + source)
 
-                composer_name = composer.getText()
+                title_file = bs(title_str, features="lxml")
 
-                composer_url = 'https://imslp.org' + composer['href']
+                composer = find_composer(title_file)
 
-                composer_name = composer_name.split(',')[1][1:]+' '+ composer_name.split(',')[0]
+                import pdb;pdb.set_trace()
+                
 
-                composer_name = unicodedata.normalize('NFKC', composer_name).strip()
-
-                composer = {'Name' : composer_name, 'url': composer_url}
 
                 if composer not in composers:
                     composers.append(composer)
@@ -176,3 +163,6 @@ def main():
         progress(count_total, len(list_of_titles), " {} files done".format(count_xml))
     write_json(dict_all, './imslp.json')
     write_json(composer_dict, './imslp_composers.json')
+
+if __name__ == '__main__':
+    main()
