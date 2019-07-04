@@ -70,13 +70,9 @@ def main():
 
                     dict_comp = {}
 
-                    pf = urllib.request.urlopen(composer['url'])
-                    yourbytes = pf.read()
+                    comp_str = read_source(composer['url'])
 
-                    yourstr = yourbytes.decode("utf8")
-                    pf.close()
-
-                    composer_file = bs(yourstr, features="lxml")
+                    composer_file = bs(comp_str, features="lxml")
 
                     if 'Wikipedia' in composer_file.getText():
                         wiki_link = composer_file.find_all('a',text = 'Wikipedia')[0]['href']
