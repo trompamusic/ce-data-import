@@ -60,11 +60,7 @@ def main():
                 title_file = bs(title_str, features="lxml")
 
                 composer = find_composer(title_file)
-
-                import pdb;pdb.set_trace()
                 
-
-
                 if composer not in composers:
                     composers.append(composer)
 
@@ -84,12 +80,15 @@ def main():
                     
                     composer_dict[composer['Name']] = dict_comp
 
-                name = bs_file.find_all(text = re.compile('Work Title'))[0].parent.parent.find('td').contents[0].string
+                name = title_file.find_all(text = re.compile('Work Title'))[0].parent.parent.find('td').contents[0].string
                 name = unicodedata.normalize('NFKC', name).strip()
-                if 'Language' in bs_file.getText():
-                    language = bs_file.find_all(text = re.compile('Language'))[0].parent.parent.find('td').contents[0].string
+                if 'Language' in title_file.getText():
+                    language = title_file.find_all(text = re.compile('Language'))[0].parent.parent.find('td').contents[0].string
 
-                mxl_links = [x.parent.parent for x in bs_file.find_all(text = re.compile('XML')) if x.parent.parent.name == 'a' ] 
+                else:
+                    language = 'Unknown'
+
+                mxl_links = [x.parent.parent for x in title_file.find_all(text = re.compile('XML')) if x.parent.parent.name == 'a' ] 
                 mxl_links_out = []
 
                 for m_link in mxl_links:
@@ -97,16 +96,12 @@ def main():
 
                     mxl_link = m_link['href']
                     
-                    fp = urllib.request.urlopen(mxl_link)
-                    mybytes = fp.read()
-                    mystr = mybytes.decode("utf8")
-                    fp.close()
-                    bubly = bs(mystr, features="lxml")
-                    mxl_final_link = 'https://imslp.org'+bubly.find_all('a',text = re.compile('download'))[0]['href']
+                    mxl_str = read_source(mxl_link)
 
+                    mxl_bs = bs(mxl_str, features="lxml")
+                    mxl_final_link = 'https://imslp.org'+mxl_bs.find_all('a',text = re.compile('download'))[0]['href']
 
                     link_parent = mxl_links[0].parent.parent.parent.parent.parent
-
 
                     pubs = link_parent.find_all(text = re.compile('Arranger|Editor'))[0].parent.parent.find('td').find('a')
 
