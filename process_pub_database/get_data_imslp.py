@@ -10,6 +10,10 @@ import unicodedata
 from utils import *
 
 def find_composer(bs_file):
+    """
+    Function to find the name and URL of a composer from an HTML page.
+    Returns a dictionary containing the name of the composer and the URL
+    """
     composer = bs_file.find_all(text = 'Composer\n')[0].parent.parent.find('td').contents[0]
 
     composer_name = composer.getText()
@@ -23,6 +27,94 @@ def find_composer(bs_file):
     composer = {'Name' : composer_name, 'url': composer_url}
 
     return composer
+
+def process_composer(composer):
+    """
+    Function to extract information about a composer from an HTML page. 
+    Returns a dictionary with the name, url, biography, wikipedia link, date of birth and date of death of the composer.
+    """
+
+    dict_comp = {}
+
+    comp_str = read_source(composer['url'])
+
+    composer_file = bs(comp_str, features="lxml")
+
+    if 'Wikipedia' in composer_file.getText():
+        wiki_link = composer_file.find_all('a',text = 'Wikipedia')[0]['href']
+        dict_comp['Wikipedia'] = wiki_link
+
+    dict_comp['Source'] = composer['url']
+    
+    dict_comp['Title'] = composer['Name']
+
+    return dict_comp
+
+def find_name(title_file):
+    """
+    Function to find the title of the work.
+    Returns a string with the normalized name of work.
+    """
+    name = title_file.find_all(text = re.compile('Work Title'))[0].parent.parent.find('td').contents[0].string
+
+    name = unicodedata.normalize('NFKC', name).strip()
+
+    return name
+
+def find_lang(title_file):
+    """
+    Function to find the title of the work.
+    Returns a string with the normalized name of work.
+    """
+    if 'Language' in title_file.getText():
+        language = title_file.find_all(text = re.compile('Language'))[0].parent.parent.find('td').contents[0].string
+
+    else:
+        language = 'Unknown'
+
+    return language
+
+def find_mxl_links(title_file, name):
+    mxl_links = [x.parent.parent for x in title_file.find_all(text = re.compile('XML')) if x.parent.parent.name == 'a' ] 
+    mxl_links_out = []
+
+    for m_link in mxl_links:
+        m_link_dict = {}
+
+        mxl_link = m_link['href']
+        
+        mxl_str = read_source(mxl_link)
+
+        mxl_bs = bs(mxl_str, features="lxml")
+        mxl_final_link = 'https://imslp.org'+mxl_bs.find_all('a',text = re.compile('download'))[0]['href']
+
+        link_parent = mxl_links[0].parent.parent.parent.parent.parent
+
+        pubs = link_parent.find_all(text = re.compile('Arranger|Editor'))[0].parent.parent.find('td').find('a')
+
+        m_link_dict['Publisher'] = pubs.getText()
+
+        m_link_dict['Publisher_url'] = 'https://imslp.org' + pubs['href']
+
+        m_link_dict['File_url'] = mxl_final_link 
+
+        m_link_dict['License'] = 'https://imslp.org' + link_parent.find_all(text = re.compile('Copy'))[0].parent.parent.find('td').find_all('a')[0]['href']
+
+        m_link_dict['Format'] = 'application/zip'
+
+        global_desc = "MusicXML score for {} ".format(name.strip())
+
+        if 'Misc. Notes' in link_parent.getText():
+
+            pub_desc = link_parent.find_all(text = re.compile('Misc. Notes'))[0].parent.parent.getText().replace('\n','').replace('Misc. Notes','')
+
+            pub_desc = unicodedata.normalize('NFKC', pub_desc).strip()
+
+            m_link_dict['Description'] =global_desc + pub_desc
+
+        mxl_links_out.append(m_link_dict)
+
+        return mxl_links_out
 
 def main():
 
@@ -64,71 +156,15 @@ def main():
                 if composer not in composers:
                     composers.append(composer)
 
-                    dict_comp = {}
+                    dict_comp = process_composer(composer)
 
-                    comp_str = read_source(composer['url'])
-
-                    composer_file = bs(comp_str, features="lxml")
-
-                    if 'Wikipedia' in composer_file.getText():
-                        wiki_link = composer_file.find_all('a',text = 'Wikipedia')[0]['href']
-                        dict_comp['Wikipedia'] = wiki_link
-
-                    dict_comp['Source'] = composer['url']
-                    
-                    dict_comp['Title'] = composer['Name']
-                    
                     composer_dict[composer['Name']] = dict_comp
 
-                name = title_file.find_all(text = re.compile('Work Title'))[0].parent.parent.find('td').contents[0].string
-                name = unicodedata.normalize('NFKC', name).strip()
-                if 'Language' in title_file.getText():
-                    language = title_file.find_all(text = re.compile('Language'))[0].parent.parent.find('td').contents[0].string
+                name = find_name(title_file)
 
-                else:
-                    language = 'Unknown'
+                language = find_lang(title_file)
 
-                mxl_links = [x.parent.parent for x in title_file.find_all(text = re.compile('XML')) if x.parent.parent.name == 'a' ] 
-                mxl_links_out = []
-
-                for m_link in mxl_links:
-                    m_link_dict = {}
-
-                    mxl_link = m_link['href']
-                    
-                    mxl_str = read_source(mxl_link)
-
-                    mxl_bs = bs(mxl_str, features="lxml")
-                    mxl_final_link = 'https://imslp.org'+mxl_bs.find_all('a',text = re.compile('download'))[0]['href']
-
-                    link_parent = mxl_links[0].parent.parent.parent.parent.parent
-
-                    pubs = link_parent.find_all(text = re.compile('Arranger|Editor'))[0].parent.parent.find('td').find('a')
-
-                    m_link_dict['Publisher'] = pubs.getText()
-
-                    m_link_dict['Publisher_url'] = 'https://imslp.org' + pubs['href']
-
-                    m_link_dict['File_url'] = mxl_final_link 
-
-                    m_link_dict['License'] = 'https://imslp.org' + link_parent.find_all(text = re.compile('Copy'))[0].parent.parent.find('td').find_all('a')[0]['href']
-
-                    m_link_dict['Format'] = 'application/zip'
-
-                    global_desc = "MusicXML score for {} ".format(name.strip())
-
-                    if 'Misc. Notes' in link_parent.getText():
-
-                        pub_desc = link_parent.find_all(text = re.compile('Misc. Notes'))[0].parent.parent.getText().replace('\n','').replace('Misc. Notes','')
-
-                        pub_desc = unicodedata.normalize('NFKC', pub_desc).strip()
-
-                        m_link_dict['Description'] =global_desc + pub_desc
-
-                    mxl_links_out.append(m_link_dict)
-
-
-
+                mxl_links_out = find_mxl_links(title_file, name)
 
                 dict_file['Title'] = name.strip()
                 dict_file['Creator'] = composer
