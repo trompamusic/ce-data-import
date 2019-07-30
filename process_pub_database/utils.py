@@ -3,6 +3,13 @@ import sys
 import urllib.request
 
 import mediawiki
+import requests
+from requests.adapters import HTTPAdapter
+
+s = requests.Session()
+adapter = HTTPAdapter(max_retries=5)
+s.mount("https://", adapter)
+s.mount("http://", adapter)
 
 
 def progress(count, total, suffix=''):
@@ -49,13 +56,15 @@ def check_mxl(md, title, keywords):
     return None
 
 
-def read_source(source):
-    """
-    Function to read a URL and return the HTML string.
-    """
-    with urllib.request.urlopen(source) as fp:
-        mybytes = fp.read()
+def read_source(source: str) -> str:
+    """Read a URL and return the HTML string.
 
-        mystr = mybytes.decode("utf8")
+    Args:
+        source: the URL of the page to load
 
-    return mystr
+    Returns:
+        the contents of the page
+    """
+    r = s.get(source)
+    r.raise_for_status()
+    return r.text
