@@ -2,7 +2,7 @@ import re
 import unicodedata
 
 from bs4 import BeautifulSoup as bs
-from utils import *
+import utils
 
 
 def find_composer(bs_file):
@@ -130,11 +130,10 @@ def main():
         try:
             count_total += 1
 
-            process, source = check_mxl(md, title, ['MusicXML'])
+            source = utils.check_mxl(md, title, ['MusicXML'])
+            if source:
 
-            if process:
-
-                title_str = read_source(source)
+                title_str = utils.read_source(source)
 
                 if 'CPDL copyright license' in title_str:
                     license = 'https://www0.cpdl.org/wiki/index.php/ChoralWiki:CPDL'
@@ -149,7 +148,7 @@ def main():
                 if composer not in composers:
                     composers.append(composer)
                     if not composer['Name'] == 'Anonymous':
-                        comp_str = read_source(composer['url'])
+                        comp_str = utils.read_source(composer['url'])
                         dict_comp = process_composer(comp_str)
                         dict_comp['Source'] = composer['url']
                         dict_comp['Title'] = composer['Name']
@@ -205,9 +204,9 @@ def main():
             count_except += 1
             print('Fail {}'.format(count_except))
             fails.append(title.encode('utf-8'))
-        progress(count_total, len(list_of_titles), " {} files done".format(count_xml))
-    write_json(dict_all, './cpdl.json')
-    write_json(composer_dict, './cpdl_composers.json')
+        utils.progress(count_total, len(list_of_titles), " {} files done".format(count_xml))
+    utils.write_json(dict_all, 'cpdl.json')
+    utils.write_json(composer_dict, 'cpdl_composers.json')
 
 
 if __name__ == '__main__':

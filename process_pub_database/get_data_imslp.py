@@ -1,8 +1,8 @@
-process_pub_database/get_data_imslp.pyimport re
+import re
 import unicodedata
 
 from bs4 import BeautifulSoup as bs
-from utils import *
+import utils
 
 
 def find_composer(bs_file):
@@ -30,7 +30,7 @@ def process_composer(composer):
 
     dict_comp = {}
 
-    comp_str = read_source(composer['url'])
+    comp_str = utils.read_source(composer['url'])
 
     composer_file = bs(comp_str, features="lxml")
 
@@ -82,7 +82,7 @@ def find_mxl_links(title_file, name):
 
         mxl_link = m_link['href']
 
-        mxl_str = read_source(mxl_link)
+        mxl_str = utils.read_source(mxl_link)
 
         mxl_bs = bs(mxl_str, features="lxml")
         mxl_final_link = 'https://imslp.org' + mxl_bs.find_all('a', text=re.compile('download'))[0]['href']
@@ -120,7 +120,7 @@ def find_mxl_links(title_file, name):
 
 
 def main():
-    list_of_titles, md = get_list_of_titles('https://imslp.org/api.php', "For unaccompanied chorus")
+    list_of_titles, md = utils.get_list_of_titles('https://imslp.org/api.php', "For unaccompanied chorus")
 
     print('Info retrieved')
 
@@ -142,12 +142,12 @@ def main():
         try:
             # title = 'Et respondens Iesus dixit illis (Lange, Gregor)'
 
-            process, source = check_mxl(md, title, ['MusicXML', 'XML'])
+            source = utils.check_mxl(md, title, ['MusicXML', 'XML'])
 
-            if process:
+            if source:
                 dict_file = {}
 
-                title_str = read_source('https:' + source)
+                title_str = utils.read_source('https:' + source)
 
                 title_file = bs(title_str, features="lxml")
 
@@ -187,9 +187,9 @@ def main():
 
             fails.append(title)
 
-        progress(count_total, len(list_of_titles), " {} files done".format(count_xml))
-    write_json(dict_all, './imslp.json')
-    write_json(composer_dict, './imslp_composers.json')
+        utils.progress(count_total, len(list_of_titles), " {} files done".format(count_xml))
+    utils.write_json(dict_all, 'imslp.json')
+    utils.write_json(composer_dict, 'imslp_composers.json')
 
 
 if __name__ == '__main__':
