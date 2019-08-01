@@ -214,7 +214,7 @@ if __name__ == '__main__':
     parser.add_argument("-o", help="output filename (without extension)", required=True)
     parser.add_argument("-n", type=int, help="Limit scraping to this many items")
     parser.add_argument("--page", type=str, help="Only scrape this page")
-    parser.add_argument("--xml", action="store_true", help="Only scrape pages that have MusicXML")
+    parser.add_argument("--xml", action="store_true", default=True, help="Only scrape pages that have MusicXML")
 
     args = parser.parse_args()
     main(args.category, args.o, args.xml, args.page, args.n)
