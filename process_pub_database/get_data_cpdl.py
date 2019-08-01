@@ -111,12 +111,12 @@ def find_mxl(bs_file):
 
 
 def main():
-    list_of_titles, md = get_list_of_titles('http://www.cpdl.org/wiki/api.php', "4-part choral music")
+    mw = utils.get_mediawiki('http://www.cpdl.org/wiki/api.php')
+    list_of_titles = utils.get_titles_in_category(mw, "4-part choral music")
 
     print('Info retrieved')
 
     count_xml = 0
-    count_target = 0
     count_total = 0
     count_except = 0
     dict_all = {}

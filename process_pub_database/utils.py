@@ -30,30 +30,44 @@ def progress(count, total, suffix=''):
 def write_json(list_of_works, file_name):
     """write a dictionary of a list of works to a JSON file.
     """
-    with open(file_name, 'w') as json_file:
-        json.dump(list_of_works, json_file, indent=4, sort_keys=True)
+    with open(file_name, 'w') as fp:
+        json.dump(list_of_works, fp, indent=4, sort_keys=True)
 
 
-def get_list_of_titles(url, category):
+def get_mediawiki(url):
+    return mediawiki.MediaWiki(url=url, rate_limit=True)
+
+
+def get_titles_in_category(mw, category):
     """Get a list of works constrained by the category from the specified URL
+
+    Arguments:
+        md: a MediaWiki object pointing to an API
+        category: the category title to get page titles from
     """
-    md = mediawiki.MediaWiki(url=url, rate_limit=True)
-    list_of_titles = md.categorymembers(category, results=None, subcategories=True)[0]
-    return list_of_titles, md
+    return mw.categorymembers(category, results=None, subcategories=True)[0]
 
 
-def check_mxl(md, title, keywords):
+def get_mw_page_contents(mw, title):
+    """Get the contents of a page named `title`.
+
+    Arguments:
+        mw: a MediaWiki object pointing to an API
+        title: the title of the page to get
+    """
+    return mw.page(title)
+
+
+def check_mxl(page_text, keywords):
     """Check if a page has a certain keyword.
     Used for checking if the input page has MXL files
     """
-    ret_page = md.page(title)
-    page_text = ret_page.html
 
     for keyword in keywords:
         if keyword in page_text:
-            return ret_page.url
+            return True
 
-    return None
+    return False
 
 
 def read_source(source: str) -> str:

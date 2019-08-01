@@ -1,7 +1,8 @@
+import argparse
 import re
 import unicodedata
 
-from bs4 import BeautifulSoup as bs
+from bs4 import BeautifulSoup
 import utils
 
 
@@ -32,14 +33,13 @@ def process_composer(composer):
 
     comp_str = utils.read_source(composer['url'])
 
-    composer_file = bs(comp_str, features="lxml")
+    composer_file = BeautifulSoup(comp_str, features="lxml")
 
     if 'Wikipedia' in composer_file.getText():
         wiki_link = composer_file.find_all('a', text='Wikipedia')[0]['href']
         dict_comp['Wikipedia'] = wiki_link
 
     dict_comp['Source'] = composer['url']
-
     dict_comp['Title'] = composer['Name']
 
     return dict_comp
@@ -52,9 +52,7 @@ def find_name(title_file):
         a string with the normalized name of work.
     """
     name = title_file.find_all(text=re.compile('Work Title'))[0].parent.parent.find('td').contents[0].string
-
     name = unicodedata.normalize('NFKC', name).strip()
-
     return name
 
 
@@ -84,7 +82,7 @@ def find_mxl_links(title_file, name):
 
         mxl_str = utils.read_source(mxl_link)
 
-        mxl_bs = bs(mxl_str, features="lxml")
+        mxl_bs = BeautifulSoup(mxl_str, features="lxml")
         mxl_final_link = 'https://imslp.org' + mxl_bs.find_all('a', text=re.compile('download'))[0]['href']
 
         link_parent = mxl_links[0].parent.parent.parent.parent.parent
@@ -119,78 +117,108 @@ def find_mxl_links(title_file, name):
         return mxl_links_out
 
 
-def main():
-    list_of_titles, md = utils.get_list_of_titles('https://imslp.org/api.php', "For unaccompanied chorus")
+def get_single_page(source):
+    print(source)
 
-    print('Info retrieved')
+    title_str = utils.read_source('https:' + source)
+
+    title_file = BeautifulSoup(title_str, features="lxml")
+
+    composer = find_composer(title_file)
+    name = find_name(title_file)
+    language = find_lang(title_file)
+
+    mxl_links_out = find_mxl_links(title_file, name)
+
+    dict_file = {'Title': name.strip(),
+                 'Creator': composer,
+                 'Description': "Composition {} by {}".format(name.strip(), composer['Name'].strip()),
+                 'Source': source,
+                 'Contributor': 'https://www.upf.edu',
+                 'Relation': mxl_links_out,
+                 'Language': 'en',
+                 'Subject': language.replace('\n', '') + ' choir piece'}
+
+    print(dict_file)
+    return dict_file
+
+
+def get_pages_for_category(mw, category_name, page_name=None, num_pages=None):
+    print("Getting pages for category {}".format(category_name))
+    list_of_titles = utils.get_titles_in_category(mw, category_name)
+    if page_name and page_name in list_of_titles:
+        return [page_name]
+    elif page_name and page_name not in list_of_titles:
+        raise Exception("Asked for page '{}' but it's not here".format(page_name))
+
+    if num_pages:
+        print("Limiting number of pages to {}".format(num_pages))
+        list_of_titles = list_of_titles[:num_pages]
+
+    return list_of_titles
+
+
+def scrape_imslp(category_name: str, select_mxml: bool, page_name: str, num_pages: int):
+    mw = utils.get_mediawiki('https://imslp.org/api.php')
+
+    list_of_titles = get_pages_for_category(mw, category_name, page_name, num_pages)
 
     count_xml = 0
-    count_target = 0
-    count_total = 0
-    count_except = 0
-    dict_text = {}
-    fails = []
-    dict_all = {}
+    all_works = []
 
-    composers = []
+    print("Got {} compositions".format(len(list_of_titles)))
 
-    composer_dict = {}
+    for count_total, title in enumerate(list_of_titles, 1):
+        #print(title)
+        page = utils.get_mw_page_contents(mw, title)
+        has_mxml = utils.check_mxl(page.html, ['MusicXML', 'XML'])
 
-    for title in list_of_titles:
-        count_total += 1
+        if has_mxml and select_mxml:
+            source = page.url
+            work_data = get_single_page(source)
 
-        try:
-            # title = 'Et respondens Iesus dixit illis (Lange, Gregor)'
-
-            source = utils.check_mxl(md, title, ['MusicXML', 'XML'])
-
-            if source:
-                dict_file = {}
-
-                title_str = utils.read_source('https:' + source)
-
-                title_file = bs(title_str, features="lxml")
-
-                composer = find_composer(title_file)
-
-                if composer not in composers:
-                    composers.append(composer)
-
-                    dict_comp = process_composer(composer)
-
-                    composer_dict[composer['Name']] = dict_comp
-
-                name = find_name(title_file)
-
-                language = find_lang(title_file)
-
-                mxl_links_out = find_mxl_links(title_file, name)
-
-                dict_file['Title'] = name.strip()
-                dict_file['Creator'] = composer
-                dict_file['Description'] = "Composition {} by {}".format(name.strip(), composer['Name'].strip())
-                dict_file['Source'] = source
-                dict_file['Contributor'] = 'https://www.upf.edu'
-                dict_file['Relation'] = mxl_links_out
-                dict_file['Language'] = 'en'
-
-                dict_file['Subject'] = language.replace('\n', '') + ' choir piece'
-
-                dict_all[title] = dict_file
-                count_xml += 1
-
-        except Exception as e:
-            print(title.encode('utf-8'))
-            print(e)
-            count_except += 1
-            print('Fail {}'.format(count_except))
-
-            fails.append(title)
+            all_works.append(work_data)
+            count_xml += 1
 
         utils.progress(count_total, len(list_of_titles), " {} files done".format(count_xml))
-    utils.write_json(dict_all, 'imslp.json')
-    utils.write_json(composer_dict, 'imslp_composers.json')
+
+    return all_works
+
+
+def scrape_composers(works):
+    seen_composers = set()
+    all_composers = []
+
+    composers = [w['Creator'] for w in works]
+    for c in composers:
+        if c['Name'] not in seen_composers:
+            dict_comp = process_composer(c)
+            all_composers.append(dict_comp)
+            seen_composers.add(c['Name'])
+
+    return all_composers
+
+
+def main(category_name, output_name, select_mxml=True, page_name=None, num_pages=None):
+
+    works = scrape_imslp(category_name, select_mxml, page_name, num_pages)
+    composers = scrape_composers(works)
+
+    work_name = "{}.json".format(output_name)
+    composer_name = "{}_composers.json".format(output_name)
+
+    utils.write_json(works, work_name)
+    utils.write_json(composers, composer_name)
 
 
 if __name__ == '__main__':
-    main()
+    # default category "For unaccompanied chorus"
+    parser = argparse.ArgumentParser(description="Read data from IMSLP")
+    parser.add_argument("category", type=str, help="The category to scrape")
+    parser.add_argument("-o", help="output filename (without extension)", required=True)
+    parser.add_argument("-n", type=int, help="Limit scraping to this many items")
+    parser.add_argument("--page", type=str, help="Only scrape this page")
+    parser.add_argument("--xml", action="store_true", help="Only scrape pages that have MusicXML")
+
+    args = parser.parse_args()
+    main(args.category, args.o, args.xml, args.page, args.n)
