@@ -130,9 +130,10 @@ def main():
         try:
             count_total += 1
 
-            source = utils.check_mxl(md, title, ['MusicXML'])
-            if source:
-
+            page = utils.get_mw_page_contents(mw, title)
+            has_mxml = utils.check_mxl(page.html, ['MusicXML'])
+            if has_mxml:
+                source = page.url
                 title_str = utils.read_source(source)
 
                 if 'CPDL copyright license' in title_str:
