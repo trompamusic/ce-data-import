@@ -118,8 +118,6 @@ def find_mxl_links(title_file, name):
 
 
 def get_single_page(source):
-    print(source)
-
     title_str = utils.read_source('https:' + source)
 
     title_file = BeautifulSoup(title_str, features="lxml")
@@ -139,7 +137,6 @@ def get_single_page(source):
                  'Language': 'en',
                  'Subject': language.replace('\n', '') + ' choir piece'}
 
-    print(dict_file)
     return dict_file
 
 
@@ -169,7 +166,6 @@ def scrape_imslp(category_name: str, select_mxml: bool, page_name: str, num_page
     print("Got {} compositions".format(len(list_of_titles)))
 
     for count_total, title in enumerate(list_of_titles, 1):
-        #print(title)
         page = utils.get_mw_page_contents(mw, title)
         has_mxml = utils.check_mxl(page.html, ['MusicXML', 'XML'])
 
