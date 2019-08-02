@@ -31,7 +31,7 @@ def add_documents(work_identifier, work):
     for r in work_relations:
         doc = {"contributor": work["Contributor"],
                "creator": r["Publisher"],
-               "description": r["Description"],
+               "description": r.get("Description", "Score for {}".format(work["Title"])),
                "format": r["Format"],
                "language": StringConstant(work["Language"]),
                "source": r["File_url"],
