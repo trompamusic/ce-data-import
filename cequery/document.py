@@ -39,7 +39,7 @@ ADD_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION = '''
 AddThingInterfaceCreativeWorkInterface(
     from: {{identifier: "{document_id}" type:DigitalDocument}}
     to: {{identifier: "{composition_id}" type:MusicComposition}}
-    field: subjectOf
+    field: exampleOfWork
 ) {{
     from {{
       __typename
