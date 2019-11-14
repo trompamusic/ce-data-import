@@ -35,7 +35,7 @@ RemoveDigitalDocumentBroadMatch(
 }}
 '''
 
-ADD_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION = '''
+ADD_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION = '''
 AddThingInterfaceCreativeWorkInterface(
     from: {{identifier: "{document_id}" type:DigitalDocument}}
     to: {{identifier: "{composition_id}" type:MusicComposition}}
@@ -50,11 +50,11 @@ AddThingInterfaceCreativeWorkInterface(
 }}
 '''
 
-REMOVE_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION = '''
+REMOVE_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION = '''
 RemoveThingInterfaceCreativeWorkInterface(
     from: {{identifier: "{document_id}" type:DigitalDocument}}
     to: {{identifier: "{composition_id}" type:MusicComposition}}
-    field: subjectOf
+    field: exampleOfWork
 ) {{
     from {{
       __typename
@@ -95,12 +95,12 @@ def get_query_remove_document_broad_match(from_document_id, to_document_id):
 
 
 def get_query_add_document_composition(composition_id, document_id):
-    query = ADD_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
+    query = ADD_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
     return MUTATION.format(mutation=query)
 
 
 def get_query_remove_document_composition(composition_id, document_id):
-    query = REMOVE_DIGITAL_DOCUMENT_SUBJECT_OF_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
+    query = REMOVE_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
     return MUTATION.format(mutation=query)
 
 

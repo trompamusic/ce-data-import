@@ -22,7 +22,7 @@ query {
     name
     identifier
     relation
-    workExample {
+    exampleOfWork {
       ... on MusicComposition {
         identifier
         name
@@ -81,7 +81,7 @@ query {
     name
     identifier
     relation
-    workExample {
+    exampleOfWork {
       ... on MusicComposition {
         identifier
         name

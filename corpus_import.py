@@ -79,7 +79,7 @@ def make_documents_broad_match(document_ids):
 
 
 def join_work_and_documents(work_identifier, document_identifiers):
-    """Mark that a score is the subjectOf a work"""
+    """Mark that a score is a workExample a work"""
     for d_id in document_identifiers:
         query = cequery.document.get_query_remove_document_composition(work_identifier, d_id)
         connection.submit_query(query)
