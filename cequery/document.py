@@ -21,6 +21,20 @@ AddDigitalDocumentBroadMatch(
 }}
 '''
 
+MERGE_DIGITAL_DOCUMENT_BROAD_MATCH = '''
+MergeDigitalDocumentBroadMatch(
+  from: {{identifier: "{from_document_id}" }}
+  to: {{identifier: "{to_document_id}" }}
+) {{
+  from {{
+    identifier
+  }}
+  to {{
+    identifier
+  }}
+}}
+'''
+
 REMOVE_DIGITAL_DOCUMENT_BROAD_MATCH = '''
 RemoveDigitalDocumentBroadMatch(
   from: {{identifier: "{from_document_id}" }}
@@ -36,31 +50,43 @@ RemoveDigitalDocumentBroadMatch(
 '''
 
 ADD_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION = '''
-AddThingInterfaceCreativeWorkInterface(
-    from: {{identifier: "{document_id}" type:DigitalDocument}}
-    to: {{identifier: "{composition_id}" type:MusicComposition}}
-    field: exampleOfWork
+AddDigitalDocumentExampleOfWork(
+    from: {{identifier: "{document_id}"}}
+    to: {{identifier: "{composition_id}"}}
 ) {{
     from {{
-      __typename
+      identifier
     }}
     to {{
-      __typename
+      identifier
+    }}
+}}
+'''
+
+MERGE_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION = '''
+MergeDigitalDocumentExampleOfWork(
+    from: {{identifier: "{document_id}"}}
+    to: {{identifier: "{composition_id}"}}
+) {{
+    from {{
+      identifier
+    }}
+    to {{
+      identifier
     }}
 }}
 '''
 
 REMOVE_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION = '''
-RemoveThingInterfaceCreativeWorkInterface(
-    from: {{identifier: "{document_id}" type:DigitalDocument}}
-    to: {{identifier: "{composition_id}" type:MusicComposition}}
-    field: exampleOfWork
+RemoveDigitalDocumentExampleOfWork(
+    from: {{identifier: "{document_id}"}}
+    to: {{identifier: "{composition_id}"}}
 ) {{
     from {{
-      __typename
+      identifier
     }}
     to {{
-      __typename
+      identifier
     }}
 }}
 '''
@@ -94,6 +120,11 @@ def get_query_remove_document_broad_match(from_document_id, to_document_id):
     return MUTATION.format(mutation=query)
 
 
+def get_mutation_merge_document_broad_match(from_document_id, to_document_id):
+    query = MERGE_DIGITAL_DOCUMENT_BROAD_MATCH.format(from_document_id=from_document_id, to_document_id=to_document_id)
+    return MUTATION.format(mutation=query)
+
+
 def get_query_add_document_composition(composition_id, document_id):
     query = ADD_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
     return MUTATION.format(mutation=query)
@@ -101,6 +132,11 @@ def get_query_add_document_composition(composition_id, document_id):
 
 def get_query_remove_document_composition(composition_id, document_id):
     query = REMOVE_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
+    return MUTATION.format(mutation=query)
+
+
+def get_mutation_merge_document_composition(composition_id, document_id):
+    query = MERGE_DIGITAL_DOCUMENT_WORK_EXAMPLE_COMPOSITION.format(document_id=document_id, composition_id=composition_id)
     return MUTATION.format(mutation=query)
 
 

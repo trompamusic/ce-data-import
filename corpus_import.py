@@ -71,20 +71,14 @@ def make_documents_broad_match(document_ids):
     """If a work has more than one score, the documents are broadMatches of each other. We should
     create relations between *all permutations* of these documents."""
     for from_id, to_id in itertools.permutations(document_ids, 2):
-        query = cequery.document.get_query_remove_document_broad_match(from_id, to_id)
-        connection.submit_query(query)
-
-        query = cequery.document.get_query_add_document_broad_match(from_id, to_id)
+        query = cequery.document.get_mutation_merge_document_broad_match(from_id, to_id)
         connection.submit_query(query)
 
 
 def join_work_and_documents(work_identifier, document_identifiers):
     """Mark that a score is a workExample a work"""
     for d_id in document_identifiers:
-        query = cequery.document.get_query_remove_document_composition(work_identifier, d_id)
-        connection.submit_query(query)
-
-        query = cequery.document.get_query_add_document_composition(work_identifier, d_id)
+        query = cequery.document.get_mutation_merge_document_composition(work_identifier, d_id)
         connection.submit_query(query)
 
 
@@ -121,10 +115,7 @@ def join_work_composer(work_identifier, composer_identifier):
     # Remove any link that is already there (We'd have to do a query anyway to check if it exists,
     # so just do it unconditionally)
     # TODO: Could select this query when getting the work originally to check if we update it
-    query = cequery.work.get_query_remove_composition_author(work_identifier, composer_identifier)
-    connection.submit_query(query)
-
-    query = cequery.work.get_query_add_composition_author(work_identifier, composer_identifier)
+    query = cequery.work.get_mutation_merge_composition_author(work_identifier, composer_identifier)
     connection.submit_query(query)
     logger.info("done")
 

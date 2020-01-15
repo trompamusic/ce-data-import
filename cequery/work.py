@@ -27,45 +27,55 @@ UpdateMusicComposition(
 }}
 '''
 
-ADD_COMPOSITION_AUTHOR = '''
-AddCreativeWorkInterfaceLegalPerson(
-  from: {{identifier: "{composition_id}" type:MusicComposition}}
-  to: {{identifier: "{composer_id}" type: Person}}
-  field: author 
+MERGE_COMPOSITION_AUTHOR = '''
+MergeCreativeWorkInterfaceAuthor(
+  from: {{identifier: "{composition_id}"}}
+  to: {{identifier: "{composer_id}"}}
 )
 {{
     from {{
-        ... on CreativeWork {{
-            identifier, contributor
+        identifier
     }}
+  to {{
+        identifier
+    }}
+}}
+'''
+
+ADD_COMPOSITION_AUTHOR = '''
+AddCreativeWorkInterfaceAuthor(
+  from: {{identifier: "{composition_id}"}}
+  to: {{identifier: "{composer_id}"}}
+)
+{{
+  from {{
+        identifier
   }}
   to {{
-        ... on Person {{
-            identifier, contributor
-    }}
+        identifier
   }}
 }}
 '''
 
 REMOVE_COMPOSITION_AUTHOR = '''
-RemoveCreativeWorkInterfaceLegalPerson(
-  from: {{identifier: "{composition_id}" type:MusicComposition}}
-  to: {{identifier: "{composer_id}" type: Person}}
-  field: author 
+RemoveCreativeWorkInterfaceAuthor(
+  from: {{identifier: "{composition_id}"}}
+  to: {{identifier: "{composer_id}"}}
 )
 {{
-    from {{
-        ... on CreativeWork {{
-            identifier, contributor
-    }}
+  from {{
+        identifier
   }}
   to {{
-        ... on Person {{
-            identifier, contributor
-    }}
+        identifier
   }}
 }}
 '''
+
+
+def get_mutation_merge_composition_author(composition_id, composer_id):
+    query = MERGE_COMPOSITION_AUTHOR.format(composition_id=composition_id, composer_id=composer_id)
+    return MUTATION.format(mutation=query)
 
 
 def get_query_add_composition_author(composition_id, composer_id):
