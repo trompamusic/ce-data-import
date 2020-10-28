@@ -24,7 +24,6 @@ def import_artist_imslp(url):
 @cli.command()
 @click.argument('mbid')
 def import_work_musicbrainz(mbid):
-    click.echo('Import work')
     loader.load_musiccomposition_from_musicbrainz(mbid)
 
 

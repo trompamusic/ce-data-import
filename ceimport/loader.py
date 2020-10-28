@@ -1,5 +1,4 @@
 import itertools
-import logging
 
 from trompace.mutations import person as mutation_person
 from trompace.mutations import musiccomposition as mutation_musiccomposition
