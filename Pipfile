@@ -5,11 +5,16 @@ verify_ssl = true
 
 [dev-packages]
 ipython = "*"
+trompace-client = {editable = true, path = "./../trompa-ce-client"}
 
 [packages]
 musicbrainzngs = "*"
 requests = "*"
-wikidata = "*"
+Wikidata = "*"
+bs4 = "*"
+pymediawiki = "*"
+lxml = "*"
+click = "*"
 
 [requires]
 python_version = "3.7"
