@@ -177,7 +177,7 @@ def mxml_link_to_mediaobject(mxl_link, title):
                              link_parent.find_all(text=re.compile('Copy'))[0].parent.parent.find('td').find_all(
                                  'a')[0]['href']
     # m_link_dict['format'] = 'application/zip'
-    m_link_dict['format'] = 'text/html'
+    m_link_dict['format_'] = 'text/html'
     # TODO: For imslp this is the special download page. We should also add url which is the end url,
     #  and contentUrl, which is the path to the xml inside the zip
     m_link_dict['source'] = mxl_link['href']
@@ -234,6 +234,18 @@ def get_composition_page(source):
     name = find_name(bs)
     composer = get_composer_from_work_page(bs)
     language = find_lang(bs)
+    language_mapping = {'english': 'en',
+                        'german': 'de',
+                        'spanish': 'es',
+                        'french': 'fr',
+                        'dutch': 'nl',
+                        'catalan': 'ca'}
+    language_code = None
+    if language:
+        language_code = language_mapping.get(language.lower())
+        if language_code is None:
+            print(f"No mapping for lanugage {language}")
+
     woo = find_woo(bs)
 
     mxl_links_out = find_mxl_links(bs)
@@ -241,8 +253,10 @@ def get_composition_page(source):
     return {'title': title,
             'name': name,
             'source': source,
-            'language': language,
-            'catalog': woo
+            'format_': 'text/html',
+            'contributor': 'https://imslp.org',
+            'language': language_code,
+            #'catalog': woo
             }, composer, mxl_links_out
 
 

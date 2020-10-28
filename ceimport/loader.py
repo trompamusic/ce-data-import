@@ -8,7 +8,7 @@ from trompace.queries import person as query_person
 from trompace.queries import musiccomposition as query_musiccomposition
 from trompace.queries import mediaobject as query_mediaobject
 
-from ceimport import connection
+from ceimport import connection, logger
 from ceimport.sites import musicbrainz
 from ceimport.sites import viaf
 from ceimport.sites import imslp
@@ -17,19 +17,12 @@ from ceimport.sites import loc
 from ceimport.sites import worldcat
 from ceimport.sites import isni
 
-logger = logging.getLogger('corpus_import')
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-# create formatter and add it to the handlers
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-# add the handlers to the logger
-logger.addHandler(ch)
 
 CREATOR_URL = "https://github.com/trompamusic/ce-data-import/tree/master"
 
 
 def load_artist_from_musicbrainz(artist_mbid):
+    logger.info("Importing musicbrainz artist %s", artist_mbid)
     persons = []
     mb_person = musicbrainz.load_person_from_musicbrainz(artist_mbid)
     persons.append(mb_person)
@@ -65,6 +58,7 @@ def load_artist_from_musicbrainz(artist_mbid):
 
 
 def load_artist_from_imslp(url):
+    logger.info("Importing imslp artist %s", url)
     people = []
     artist_mbid = musicbrainz.get_artist_mbid_by_imslp_url(url)
     # TODO: If the artist exists in MB, then we should also import all of the other
@@ -102,7 +96,7 @@ def get_existing_mediaobject_by_source(source) -> str:
 
 def create_mediaobject(mediaobject):
     mediaobject["creator"] = CREATOR_URL
-    mutation_create = mutation_mediaobject.mutation_create_mediaobject(**mediaobject)
+    mutation_create = mutation_mediaobject.mutation_create_media_object(**mediaobject)
     resp = connection.submit_request(mutation_create)
     # TODO: If this query fails?
     return resp['data']['CreateMediaObject']['identifier']
@@ -192,10 +186,11 @@ def get_or_create_mediaobject(mediaobject):
 
 
 def load_musiccomposition_from_musicbrainz(work_mbid):
+    logger.info("Importing musicbrainz work %s", work_mbid)
     meta = musicbrainz.load_work_from_musicbrainz(work_mbid)
 
     # Create composition, or get its id if it already exists
-    musiccomp_ceid = get_or_create_mediaobject(meta['work'])
+    musiccomp_ceid = get_or_create_musiccomposition(meta['work'])
 
     # Import the work's composer if it doesn't exist
     # This will hit MB for the artist lookup, but won't write to the CE if the composer already exists
@@ -206,7 +201,7 @@ def load_musiccomposition_from_musicbrainz(work_mbid):
     all_part_ids = []
     # For each part, import the part and then link it to the main work
     for part in meta['parts']:
-        part_id = get_or_create_mediaobject(part)
+        part_id = get_or_create_musiccomposition(part)
         all_part_ids.append(part_id)
 
     link_musiccomposition_and_parts(musiccomp_ceid, all_part_ids)
@@ -223,9 +218,10 @@ def load_musiccomposition_from_imslp(imslp_url):
     TODO: Should be able to specify a Special:ReverseLookup url which gives the composition and file
     """
 
+    logger.info("Importing imslp work %s", imslp_url)
     composition, composer_url, xml_objects = imslp.get_composition_page(imslp_url)
 
-    composition_id = get_or_create_mediaobject(composition)
+    composition_id = get_or_create_musiccomposition(composition)
     composer_ids = load_artist_from_imslp(composer_url)
     link_musiccomposition_and_composers(composition_id, composer_ids)
 
