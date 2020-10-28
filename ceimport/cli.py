@@ -30,9 +30,10 @@ def import_work_musicbrainz(mbid):
 @cli.command()
 @click.option('--file')
 @click.option('--url')
-def import_work_imslp(file, url):
+@click.option('--need-xml/--no-need-xml', is_flag=True, default=True, help="If set, require that there is an xml file for download")
+def import_work_imslp(file, url, need_xml):
     if url:
-        loader.load_musiccomposition_from_imslp(url)
+        loader.load_musiccomposition_from_imslp(url, need_xml)
     elif file:
         with open(file, 'r') as fp:
             for page in fp:

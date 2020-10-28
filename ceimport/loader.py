@@ -210,7 +210,7 @@ def load_musiccomposition_from_musicbrainz(work_mbid):
         link_musiccomposition_and_composers(part_id, composer_ids)
 
 
-def load_musiccomposition_from_imslp(imslp_url):
+def load_musiccomposition_from_imslp(imslp_url, need_xml):
     """Load a MusicComposition from a page on IMSLP,
     and also load any musicxml files as MediaObjects
     TODO: Should be able to specify what to download, e.g. a specific PDF, or all files, or only music xmls
@@ -220,10 +220,13 @@ def load_musiccomposition_from_imslp(imslp_url):
     logger.info("Importing imslp work %s", imslp_url)
     composition, composer_url, xml_objects = imslp.get_composition_page(imslp_url)
 
-    composition_id = get_or_create_musiccomposition(composition)
-    composer_ids = load_artist_from_imslp(composer_url)
-    link_musiccomposition_and_composers(composition_id, composer_ids)
+    if not need_xml or xml_objects:
+        composition_id = get_or_create_musiccomposition(composition)
+        composer_ids = load_artist_from_imslp(composer_url)
+        link_musiccomposition_and_composers(composition_id, composer_ids)
 
-    for xml in xml_objects:
-        mediaobject_id = get_or_create_mediaobject(xml)
-        link_musiccomposition_and_mediaobject(composition_id, mediaobject_id)
+        for xml in xml_objects:
+            mediaobject_id = get_or_create_mediaobject(xml)
+            link_musiccomposition_and_mediaobject(composition_id, mediaobject_id)
+    else:
+        logger.info(" - No xml files, skipping")
