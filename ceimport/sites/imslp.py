@@ -121,8 +121,13 @@ def find_name(title_file):
     Returns:
         a string with the normalized name of work.
     """
-    name = title_file.find_all(text=re.compile('Work Title'))[0].parent.parent.find('td').contents[0].string
-    name = unicodedata.normalize('NFKC', name).strip()
+    work_title = title_file.find('th', text=re.compile('Work Title'))
+    name = None
+    if work_title:
+        name_node = work_title.parent.find('td')
+        if name_node:
+            name = name_node.text.strip()
+            name = unicodedata.normalize('NFKC', name)
     return name
 
 
@@ -134,7 +139,7 @@ def find_lang(title_file):
     """
     # TODO: Convert to iso code
     if 'Language' in title_file.getText():
-        language = title_file.find_all(text=re.compile('Language'))[0].parent.parent.find('td').contents[0].string
+        language = title_file.find('th', text=re.compile('Language')).parent.find('td').text
         return language.strip()
     else:
         return None
@@ -225,7 +230,6 @@ def get_composition_page(source):
     if source.startswith("//"):
         source = 'https:' + source
     page = read_source(source)
-
     bs = BeautifulSoup(page, features="lxml")
     title = bs.find("title")
     if title:
