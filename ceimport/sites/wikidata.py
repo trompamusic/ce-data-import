@@ -4,6 +4,8 @@ from urllib.parse import urlparse
 import requests
 from requests.adapters import HTTPAdapter
 
+from ceimport import cache
+
 s = requests.Session()
 adapter = HTTPAdapter(max_retries=5, pool_connections=100, pool_maxsize=100)
 s.mount("https://", adapter)
@@ -13,6 +15,7 @@ class WikipediaException(Exception):
     pass
 
 
+@cache.dict()
 def load_person_from_wikidata(wikidata_url):
 
     # TODO: Description, multiple versions for different languages
@@ -35,6 +38,7 @@ def load_person_from_wikidata(wikidata_url):
         return {}
 
 
+@cache.dict()
 def load_person_from_wikipedia(wikidata_url, language):
     """Given a wikidata url, get information from wikipedia
     TODO: Allow a wikipedia URL as argument too
@@ -83,6 +87,7 @@ def parse_description_from_wikipedia_response(title, data):
     return ""
 
 
+@cache.dict()
 def get_wikidata_id_from_wikipedia_url(wp_url):
     """Get the wikidata id for this URL if it exists
     Returns None if the page has no wikidata id"""

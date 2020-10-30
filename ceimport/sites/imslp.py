@@ -1,10 +1,15 @@
+import base64
+import json
 import re
 import unicodedata
+import urllib
 
 from bs4 import BeautifulSoup
 import requests
 from mediawiki import mediawiki
 from requests.adapters import HTTPAdapter
+
+from ceimport import cache
 
 s = requests.Session()
 adapter = HTTPAdapter(max_retries=5)
@@ -57,7 +62,9 @@ def read_source(source: str) -> str:
     Returns:
         the contents of the page
     """
-    r = s.get(source)
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+    r = s.get(source, headers=headers)
     r.raise_for_status()
     return r.text
 
@@ -71,48 +78,6 @@ def get_composer_from_work_page(bs_file):
     composer = bs_file.find(class_="wi_body").find_all(text='Composer\n')[0].parent.parent.find('td').contents[0]
     composer_url = 'https://imslp.org' + composer['href']
     return composer_url
-
-
-def process_composer(composer_source):
-    """Extract information about a composer from an HTML page.
-
-    Returns:
-        a dictionary with the name, url, biography, wikipedia link, date of birth and date of death of the composer.
-    """
-    # TODO: external links, use to cross-link to musicbrainz, wikipedia, viaf, worldcat, loc
-
-    page = read_source(composer_source)
-    bs = BeautifulSoup(page, features="lxml")
-
-    title = bs.find("title")
-    if title:
-        title = title.text
-
-    composer = bs.find("span", {"class": "mw-headline"})
-    if composer:
-        composer = composer.text
-        composer = unicodedata.normalize('NFKC', composer).strip()
-
-    # dates
-    dates = bs.find("div", {"class": "cp_firsth"})
-    if dates:
-        match = re.search(r"\(.*?\)", dates.text)
-        if match:
-            dates = match.group()
-            date_parts = dates.split("—")
-            if len(date_parts) == 2:
-                date_from = date_parts[0]
-                date_to = date_parts[1]
-                # TODO: Parse dates and add if they are valid
-
-    return {
-        'title': title,
-        'name': composer,
-        'contributor': 'https://imslp.org/',
-        'source': composer_source,
-        'format_': 'text/html',
-        'language': 'en'
-    }
 
 
 def find_name(title_file):
@@ -250,8 +215,6 @@ def get_composition_page(source):
         if language_code is None:
             print(f"No mapping for lanugage {language}")
 
-    woo = find_woo(bs)
-
     mxl_links_out = find_mxl_links(bs)
 
     return {'title': title,
@@ -260,7 +223,6 @@ def get_composition_page(source):
             'format_': 'text/html',
             'contributor': 'https://imslp.org',
             'language': language_code,
-            #'catalog': woo
             }, composer, mxl_links_out
 
 
@@ -305,18 +267,138 @@ def scrape_imslp(list_of_titles: str, select_mxml: bool, page_name: str, num_pag
     return all_works
 
 
-def scrape_composers(works):
-    seen_composers = set()
-    all_composers = []
+def api_all_pages():
+    base_url = "https://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type=2/start={}/retformat=json"
+    hasnext = True
+    start = 0
+    alldata = []
+    while hasnext:
+        url = base_url.format(start)
+        print(url)
+        r = requests.get(url)
+        j = r.json()
+        metadata = j.get('metadata', {})
+        if metadata:
+            hasnext = metadata.get('moreresultsavailable', False)
+        for i in range(1000):
+            data = j.get(str(i))
+            if data:
+                alldata.append(data)
+        start += 1000
+    with open("all-imslp-pages.json", "w") as fp:
+        json.dump(alldata, fp)
 
-    composers = [w['Creator'] for w in works]
-    for c in composers:
-        if c not in seen_composers:
-            dict_comp = process_composer(c)
-            all_composers.append(dict_comp)
-            seen_composers.add(c)
 
-    return all_composers
+def api_composers_for_works(all_pages_file, works_file):
+    """Given a file ``all_pages_file`` from api_all_pages, and a list of works in `works_file`,
+    return a unique list of composer categories for all of these works"""
+    with open(all_pages_file) as fp:
+        j = json.load(fp)
+
+    with open(works_file) as fp:
+        works = set(fp.read().splitlines())
+    composers = set()
+    for work in j:
+        if work['id'] in works:
+            composers.add(work['parent'])
+
+    return sorted(list(composers))
+
+
+def parse_imslp_date(year, month, day):
+    """Return a date from imslp. Only return if all 3 components exist, and are integers
+    This prevents parsing items that only have some components (e.g. yyyy-mm), or approximate
+    values (e.g. c 1600)"""
+    if year and month and day:
+        try:
+            int(year)
+            int(month)
+            int(day)
+            return f"{year}-{month}-{day}"
+        except ValueError:
+            return None
+
+
+@cache.dict()
+def api_composer_raw_query(composer_name):
+    composer_id = base64.b64encode(urllib.parse.quote(composer_name).encode("utf-8"))
+    composer_id = composer_id.decode('utf-8')
+    url = f"https://imslp.org/imslpscripts/API.ISCR.php?retformat=json/disclaimer=accepted/type=0/id={composer_id}"
+    r = s.get(url)
+    return r.json()
+
+
+@cache.dict()
+def api_composer_get_relations(composer_name):
+    j = api_composer_raw_query(composer_name)
+
+    composer = j["0"]
+    intvals = composer["intvals"]
+    authorities = intvals.get("wikidata", {}).get("authorities", [])
+
+    external_relations = {}
+    for link, url, identifier in authorities:
+        if identifier == "Worldcat":
+            external_relations['worldcat'] = url
+        elif link == "[[wikipedia:Virtual International Authority File|VIAF]]":
+            external_relations['viaf'] = url
+        elif identifier == "Wikipedia":
+            external_relations['wikipedia'] = url
+        elif link == "[[wikipedia:MusicBrainz|MusicBrainz]]":
+            external_relations['musicbrainz'] = identifier
+        elif link == "[[wikipedia:International Standard Name Identifier|ISNI]]":
+            external_relations['isni'] = url
+        elif link == "[[wikipedia:Library of Congress Control Number|LCCN]]":
+            external_relations['loc'] = url
+
+    return external_relations
+
+
+@cache.dict()
+def api_composer(composer_name):
+    """Arguments:
+          composer_name: an imslp Category name for a composer"""
+    j = api_composer_raw_query(composer_name)
+
+    composer = j["0"]
+    extvals = composer["extvals"]
+    intvals = composer["intvals"]
+    family_name = intvals.get("lastname")
+    given_name = intvals.get("firstname")
+    name = intvals.get("normalname")
+    gender = extvals.get("Sex")
+    image = intvals.get("picturelinkraw")
+    if image:
+        image = f"https://imslp.org{image}"
+
+    birth_date = parse_imslp_date(extvals.get("Born Year"), extvals.get("Born Month"), extvals.get("Born Day"))
+    death_date = parse_imslp_date(extvals.get("Died Year"), extvals.get("Died Month"), extvals.get("Died Day"))
+
+    composer_source = composer["permlink"]
+
+    # Make a second query to get the actual html title
+    page = read_source(composer_source)
+    bs = BeautifulSoup(page, features="lxml")
+    title = bs.find("title")
+    if title:
+        title = title.text
+    else:
+        title = None
+
+    return {
+        'contributor': 'https://imslp.org/',
+        'source': composer_source,
+        'format_': 'text/html',
+        'language': 'en',
+        'title': title,
+        'name': name,
+        'gender': gender,
+        'family_name': family_name,
+        'given_name': given_name,
+        'birth_date': birth_date,
+        'death_date': death_date,
+        'image': image
+    }
 
 
 def main(category_names, output_name, select_mxml=True, page_name=None, num_pages=None):

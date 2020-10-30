@@ -2,12 +2,15 @@ import requests
 from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 
+from ceimport import cache
+
 s = requests.Session()
 adapter = HTTPAdapter(max_retries=5, pool_connections=100, pool_maxsize=100)
 s.mount("https://", adapter)
 s.mount("http://", adapter)
 
 
+@cache.dict()
 def load_person_from_worldcat(worldcat_url):
     try:
         r = s.get(worldcat_url)

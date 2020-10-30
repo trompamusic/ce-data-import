@@ -1,8 +1,8 @@
-from urllib.parse import quote_plus, urlencode
-
 import requests
 from musicbrainzngs import musicbrainz as mb
 from requests.adapters import HTTPAdapter
+
+from ceimport import cache
 
 mb.set_useragent('trompa', '0.1')
 
@@ -23,26 +23,36 @@ COMPOSER_REL = 'd59d99ea-23d4-4a80-b066-edca32ee158f'
 PARTS_REL = 'ca8d3642-ce5f-49f8-91f2-125d72524e6a'
 
 
+@cache.dict()
 def load_person_from_musicbrainz(artist_mbid):
     artist = mb.get_artist_by_id(artist_mbid)['artist']
     name = artist['name']
 
-    '''TODO: add these items
-    args = {
+    '''TODO: add these items?
         'familyName': family_name,
         'givenName': given_name,
-        'description': description,
-        'image': image,
         'publisher': publisher,
         'honorificPrefix': honorific_prefix,
         'honorificSuffix': honorific_suffix,
         'jobTitle': job_title
         
     Other biblio info? Places, birth date, death date, gender
-    
     language
     If there are aliases in our languages, import them with those languages
-    }'''
+    '''
+
+    begin_area = artist.get('begin-area', {}).get('id')
+    end_area = artist.get('end-area', {}).get('id')
+    birthplace = deathplace = None
+    if begin_area:
+        birthplace = load_area_from_musicbrainz(begin_area)
+    if end_area:
+        deathplace = load_area_from_musicbrainz(end_area)
+    lifespan = artist.get('life-span')
+    born = died = None
+    if lifespan:
+        born = lifespan.get('begin')
+        died = lifespan.get('end')
 
     return {
         # This is the title of the page, so it includes the header
@@ -51,10 +61,15 @@ def load_person_from_musicbrainz(artist_mbid):
         'contributor': 'https://musicbrainz.org/',
         'source': f'https://musicbrainz.org/artist/{artist_mbid}',
         'format_': 'text/html',
-        'language': 'en'
+        'language': 'en',
+        'birth_date': born,
+        'death_date': died,
+        'birthplace': birthplace,
+        'deathplace': deathplace
     }
 
 
+@cache.dict()
 def load_person_relations_from_musicbrainz(artist_mbid):
     # TODO: Don't do this request twice
 
@@ -84,12 +99,9 @@ def load_person_relations_from_musicbrainz(artist_mbid):
     return external_relations
 
 
+@cache.dict()
 def load_work_from_musicbrainz(work_mbid):
     work = mb.get_work_by_id("94a19e47-2c1d-425b-b4f0-63d62d5bf788", includes=["artist-rels", "work-rels"])['work']
-    """
-     
-                                      subject: str = None,
-                                      description: str = None, position: int = None"""
 
     title = work['title']
     work_dict = {
@@ -141,6 +153,21 @@ def load_work_from_musicbrainz(work_mbid):
             "parts": parts}
 
 
+@cache.dict()
+def load_area_from_musicbrainz(area_id):
+    area = mb.get_area_by_id(area_id)['area']
+    name = area['name']
+    return {
+        # This is the title of the page, so it includes the header
+        'title': f'{name} - MusicBrainz',
+        'name': name,
+        'contributor': 'https://musicbrainz.org/',
+        'source': f'https://musicbrainz.org/area/{area_id}',
+        'format_': 'text/html',
+        'language': 'en'
+    }
+
+
 def get_work_mbid_by_imslp_url(imslp_url):
     return _lookup_imslp_url(imslp_url, 'work-rels', _parse_url_work_relation)
 
@@ -149,6 +176,7 @@ def get_artist_mbid_by_imslp_url(imslp_url):
     return _lookup_imslp_url(imslp_url, 'artist-rels', _parse_url_artist_relation)
 
 
+@cache.dict()
 def _lookup_imslp_url(url, includes, parse_callback):
     # In Musicbrainz, imslp urls are all https:
     if url.startswith("http://"):

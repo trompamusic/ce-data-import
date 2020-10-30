@@ -15,6 +15,7 @@ bs4 = "*"
 pymediawiki = "*"
 lxml = "*"
 click = "*"
+redis-decorator = "*"
 
 [requires]
 python_version = "3.7"

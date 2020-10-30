@@ -1,6 +1,7 @@
 import itertools
 
 from trompace.mutations import person as mutation_person
+from trompace.mutations import place as mutation_place
 from trompace.mutations import musiccomposition as mutation_musiccomposition
 from trompace.mutations import mediaobject as mutation_mediaobject
 from trompace.queries import person as query_person
@@ -31,7 +32,8 @@ def load_artist_from_musicbrainz(artist_mbid):
         viaf_person = viaf.load_person_from_viaf(rels['viaf'])
         persons.append(viaf_person)
     if 'imslp' in rels:
-        imslp_person = imslp.process_composer(rels['imslp'])
+        # TODO: If there are more rels in imslp that aren't in MB we could use them here
+        imslp_person = imslp.api_composer(rels['imslp'])
         persons.append(imslp_person)
     if 'worldcat' in rels:
         worldcat_person = worldcat.load_person_from_worldcat(rels['worldcat'])
@@ -51,24 +53,72 @@ def load_artist_from_musicbrainz(artist_mbid):
         if wp_person:
             persons.append(wp_person)
 
-    # TODO: This returns all person ids that we created, but there could be other
-    #  ids in the database of this person, we should link those and return them too
-    return create_persons_and_link(persons)
+    # dedup by source
+    ret = []
+    seen = set()
+    for p in persons:
+        if p['source'] not in seen:
+            ret.append(p)
+            seen.add(p['source'])
+    return ret
 
 
 def load_artist_from_imslp(url):
     logger.info("Importing imslp artist %s", url)
-    people = []
-    artist_mbid = musicbrainz.get_artist_mbid_by_imslp_url(url)
-    # TODO: If the artist exists in MB, then we should also import all of the other
-    #  relationships that exist, by using `load_artist_from_musicbrainz`
-    if artist_mbid:
-        mb_person = musicbrainz.load_person_from_musicbrainz(artist_mbid)
-        people.append(mb_person)
+    if "Category:" not in url:
+        raise Exception("Url should be an imslp Category: url")
 
-    person = imslp.process_composer(url)
-    people.append(person)
-    return create_persons_and_link(people)
+    if url.startswith("https://imslp.org"):
+        url = "/".join(url.split("/")[4:])
+
+    people = []
+
+    imslp_person = imslp.api_composer(url)
+    people.append(imslp_person)
+
+    rels = imslp.api_composer_get_relations(url)
+    if 'worldcat' in rels:
+        worldcat_person = worldcat.load_person_from_worldcat(rels['worldcat'])
+        people.append(worldcat_person)
+    if 'viaf' in rels:
+        viaf_person = viaf.load_person_from_viaf(rels['viaf'])
+        people.append(viaf_person)
+    if 'wikipedia' in rels:
+        wikidata_id = wikidata.get_wikidata_id_from_wikipedia_url(rels['wikipedia'])
+        if wikidata_id:
+            wd_person = wikidata.load_person_from_wikidata(rels['wikidata'])
+            if wd_person:
+                people.append(wd_person)
+            wp_person = wikidata.load_person_from_wikipedia(rels['wikidata'], 'en')
+            if wp_person:
+                people.append(wp_person)
+    if 'musicbrainz' in rels:
+        mb_person = musicbrainz.load_person_from_musicbrainz(rels['musicbrainz'])
+        people.append(mb_person)
+    if 'isni' in rels:
+        isni_person = isni.load_person_from_isni(rels['isni'])
+        people.append(isni_person)
+    if 'loc' in rels:
+        loc_person = loc.load_person_from_loc(rels['loc'])
+        people.append(loc_person)
+
+    # If no link to musicbrainz from imslp, do a reverse lookup in musicbrainz to see if it's there
+    if 'musicbrainz' not in rels:
+        artist_mbid = musicbrainz.get_artist_mbid_by_imslp_url(url)
+        # TODO: If the artist exists in MB, then we should also import all of the other
+        #  relationships that exist, by using `load_artist_from_musicbrainz`
+        if artist_mbid:
+            mb_person = musicbrainz.load_person_from_musicbrainz(artist_mbid)
+            people.append(mb_person)
+
+    # dedup by source
+    ret = []
+    seen = set()
+    for p in people:
+        if p['source'] not in seen:
+            ret.append(p)
+            seen.add(p['source'])
+    return ret
 
 
 def get_existing_person_by_source(source) -> str:
@@ -102,11 +152,54 @@ def create_mediaobject(mediaobject):
 
 
 def create_person(person):
+    """Create a person object
+    Arguments:
+        person: a dictionary where keys are the parameters to the `mutation_create_person` function
+
+    If `person` includes the keys 'birthplace' or 'deathplace', these items are extracted out,
+    used to create a Place object, and then linked to the person
+    """
     person["creator"] = CREATOR_URL
+
+    birthplace = None
+    if 'birthplace' in person:
+        birthplace = person['birthplace']
+        del person['birthplace']
+    deathplace = None
+    if 'deathplace' in person:
+        deathplace = person['deathplace']
+        del person['deathplace']
+
     mutation_create = mutation_person.mutation_create_person(**person)
     resp = connection.submit_request(mutation_create)
     # TODO: If this query fails?
-    return resp['data']['CreatePerson']['identifier']
+    person_id = resp['data']['CreatePerson']['identifier']
+
+    if birthplace:
+        birthplace["creator"] = CREATOR_URL
+        mutation_create = mutation_place.mutation_create_place(**birthplace)
+        resp = connection.submit_request(mutation_create)
+        birthplace_id = resp['data']['CreatePlace']['identifier']
+        mutation_merge = mutation_place.mutation_merge_person_birthplace(person_id, birthplace_id)
+        connection.submit_request(mutation_merge)
+
+    if deathplace:
+        deathplace["creator"] = CREATOR_URL
+        mutation_create = mutation_place.mutation_create_place(**deathplace)
+        resp = connection.submit_request(mutation_create)
+        deathplace_id = resp['data']['CreatePlace']['identifier']
+        mutation_merge = mutation_place.mutation_merge_person_deathplace(person_id, deathplace_id)
+        connection.submit_request(mutation_merge)
+
+    return person_id
+
+
+def create_place(place):
+    place["creator"] = CREATOR_URL
+    mutation_create = mutation_place.mutation_create_place(**place)
+    resp = connection.submit_request(mutation_create)
+    # TODO: If this query fails?
+    return resp['data']['CreatePlace']['identifier']
 
 
 def create_musiccomposition(musiccomposition):
@@ -143,11 +236,11 @@ def link_musiccomposition_and_mediaobject(composition_id, mediaobject_id):
 
 
 def create_persons_and_link(persons):
+    # TODO: This returns all person ids that we created, but there could be other
+    #  ids in the database of this person, we should link those and return them too
     person_ids = []
     for p in persons:
-        p_id = get_existing_person_by_source(p['source'])
-        if not p_id:
-            p_id = create_person(p)
+        p_id = get_or_create_person(p)
         person_ids.append(p_id)
 
     # Join together all persons
@@ -164,6 +257,13 @@ def get_existing_musiccomposition_by_source(source) -> str:
         return None
     else:
         return mc[0]['identifier']
+
+
+def get_or_create_person(person):
+    existing = get_existing_person_by_source(person['source'])
+    if existing:
+        return existing
+    return create_person(person)
 
 
 def get_or_create_musiccomposition(musiccomposition):
@@ -195,7 +295,8 @@ def load_musiccomposition_from_musicbrainz(work_mbid):
     # This will hit MB for the artist lookup, but won't write to the CE if the composer already exists
     composer = meta['composer_mbid']
     # Returns all composer ids of all exactMatches for this composer
-    composer_ids = load_artist_from_musicbrainz(composer)
+    persons = load_artist_from_musicbrainz(composer)
+    composer_ids = create_persons_and_link(persons)
 
     all_part_ids = []
     # For each part, import the part and then link it to the main work
