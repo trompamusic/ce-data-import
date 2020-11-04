@@ -7,6 +7,7 @@ import urllib
 from bs4 import BeautifulSoup
 import requests
 from mediawiki import mediawiki
+import mwparserfromhell as mwph
 from requests.adapters import HTTPAdapter
 
 from ceimport import cache
@@ -17,10 +18,6 @@ s.mount("https://", adapter)
 s.mount("http://", adapter)
 
 
-def get_mediawiki(url):
-    return mediawiki.MediaWiki(url=url, rate_limit=True)
-
-
 def get_titles_in_category(mw, category):
     """Get a list of works constrained by the category from the specified URL
 
@@ -29,28 +26,6 @@ def get_titles_in_category(mw, category):
         category: the category title to get page titles from
     """
     return mw.categorymembers(category, results=None, subcategories=True)[0]
-
-
-def get_mw_page_contents(mw, title):
-    """Get the contents of a page named `title`.
-
-    Arguments:
-        mw: a MediaWiki object pointing to an API
-        title: the title of the page to get
-    """
-    return mw.page(title)
-
-
-def check_mxl(page_text, keywords):
-    """Check if a page has a certain keyword.
-    Used for checking if the input page has MXL files
-    """
-
-    for keyword in keywords:
-        if keyword in page_text:
-            return True
-
-    return False
 
 
 def read_source(source: str) -> str:
@@ -67,60 +42,6 @@ def read_source(source: str) -> str:
     r = s.get(source, headers=headers)
     r.raise_for_status()
     return r.text
-
-
-def get_composer_from_work_page(bs_file):
-    """Find the name and URL of a composer from an HTML page.
-
-    Returns:
-        a dictionary containing the name of the composer and the URL
-    """
-    composer = bs_file.find(class_="wi_body").find_all(text='Composer\n')[0].parent.parent.find('td').contents[0]
-    composer_url = 'https://imslp.org' + composer['href']
-    return composer_url
-
-
-def find_name(title_file):
-    """Find the title of the work.
-
-    Returns:
-        a string with the normalized name of work.
-    """
-    work_title = title_file.find('th', text=re.compile('Work Title'))
-    name = None
-    if work_title:
-        name_node = work_title.parent.find('td')
-        if name_node:
-            name = name_node.text.strip()
-            name = unicodedata.normalize('NFKC', name)
-    return name
-
-
-def find_lang(title_file):
-    """Find the title of the work.
-
-    Returns:
-        a string with the normalized name of work.
-    """
-    # TODO: Convert to iso code
-    if 'Language' in title_file.getText():
-        language = title_file.find('th', text=re.compile('Language')).parent.find('td').text
-        return language.strip()
-    else:
-        return None
-
-
-def find_woo(title_file):
-    """Find the WoO catalog number of the work.
-
-    Returns:
-        a string with the normalized catalog number of the work.
-    """
-    if 'Opus/Catalogue Number' in title_file.getText():
-        woo = title_file.find_all(text=re.compile('Opus/Catalogue Number'))[0].parent.parent.parent.find('td').contents[0].string
-        return woo.strip()
-    else:
-        return None
 
 
 def special_link_to_download_url(special_link, download_id):
@@ -166,43 +87,51 @@ def mxml_link_to_mediaobject(mxl_link, title):
     return m_link_dict
 
 
-def find_mxl_links(bs_work):
-    """Find links to mxml zip downloads on a composition page"""
-    mxl_links = [x.parent.parent for x in bs_work.find_all(text=re.compile('XML')) if x.parent.parent.name == 'a']
-    mxl_links_out = []
+def composition_wikitext_to_music_composition(wikitext):
+    parsed = mwph.parse(wikitext["content"])
+    url = wikitext["title"].replace(" ", "_")
+    composer = None
+    inlanguage = None
+    name = None
 
-    title = bs_work.find("title")
-    if title:
-        title = title.text
+    # TODO: License
+    for template in parsed.filter_templates():
+        if template.name == "Composer":
+            composer = template.params[0]
+        if template.name == "Language":
+            inlanguage = template.params[0]
+        if template.name == "Title":
+            # Title has italics markings, so we parse it again an get just the text
+            # filter_text() returns [Title, thetitle]
+            name = mwph.parse(template).filter_text()[1]
 
-    for m_link in mxl_links:
-        mxl_links_out.append(mxml_link_to_mediaobject(m_link, title))
+    # We don't get this from the <title>, but just construct it to prevent having
+    #  to make another query
+    title = f"{wikitext['title']} - ChoralWiki"
+    work_dict = {
+        # This is the title of the page, so it includes the header
+        'title': title,
+        'name': name,
+        'contributor': 'https://cpdl.org/',
+        'source': f'https://cpdl.org/wiki/index.php/{url}',
+        'format_': 'text/html',
+        'language': 'en',
+        'inlanguage': inlanguage
+    }
 
-    return mxl_links_out
+    return {"work": work_dict,
+            "composer": composer}
 
 
 def get_composition_page(source):
     """
-    Returns: Work dict, composer url, files (list)
-    """
-    # TODO: Use JSON API:
-    """
-    https://imslp.org/imslpscripts/API.ISCR.php?account=worklist/disclaimer=accepted/sort=id/type=2/start=0/retformat=json
-    Base 64 name in the id param
-    https://imslp.org/imslpscripts/API.ISCR.php?retformat=json/disclaimer=accepted/type=0/id=MTIgRWFzeSBQcmVsdWRlcyBmb3IgSGFycCAoQ3JhdmVuLCBKb2huIFRob21hcyk=
+    Returns: Work dict, composer url
     """
 
+    title = "Affer opem (Lange, Gregor) - IMSLP: Free Sheet Music PDF Download"
     if source.startswith("//"):
         source = 'https:' + source
-    page = read_source(source)
-    bs = BeautifulSoup(page, features="lxml")
-    title = bs.find("title")
-    if title:
-        title = title.text
 
-    name = find_name(bs)
-    composer = get_composer_from_work_page(bs)
-    language = find_lang(bs)
     language_mapping = {'english': 'en',
                         'german': 'de',
                         'spanish': 'es',
@@ -215,15 +144,13 @@ def get_composition_page(source):
         if language_code is None:
             print(f"No mapping for lanugage {language}")
 
-    mxl_links_out = find_mxl_links(bs)
-
     return {'title': title,
             'name': name,
             'source': source,
             'format_': 'text/html',
             'contributor': 'https://imslp.org',
             'language': language_code,
-            }, composer, mxl_links_out
+            }, composer
 
 
 def get_pages_for_category(mw, category_name, page_name=None, num_pages=None):
@@ -242,29 +169,56 @@ def get_pages_for_category(mw, category_name, page_name=None, num_pages=None):
 
 
 def category_pagelist(category_name: str):
-    mw = get_mediawiki('https://imslp.org/api.php')
+    mw = mediawiki.MediaWiki(url='https://imslp.org/api.php', rate_limit=True)
 
     list_of_titles = get_pages_for_category(mw, category_name)
     return list_of_titles
 
 
-def scrape_imslp(list_of_titles: str, select_mxml: bool, page_name: str, num_pages: int):
-    print("Got {} compositions".format(len(list_of_titles)))
-    mw = get_mediawiki('https://imslp.org/api.php')
+def get_wiki_content_for_pages(pages):
+    if len(pages) > 50:
+        raise ValueError("can only do up to 50 pages")
 
-    all_works = []
-    count_xml = 0
+    query = "|".join(pages)
+    params = {
+        "action": "query",
+        "prop": "revisions",
+        "titles": query,
+        "rvslots": "*",
+        "rvprop": "content",
+        "formatversion": "2",
+        "format": "json"
+    }
+    url = 'https://imslp.org/api.php'
 
-    for count_total, title in enumerate(list_of_titles, 1):
-        page = get_mw_page_contents(mw, title)
-        has_mxml = check_mxl(page.html, ['MusicXML', 'XML'])
+    r = requests.get(url, params=params)
 
-        if not select_mxml or has_mxml:
-            work_data, composer, files = get_composition_page(page.url)
-            all_works.append(work_data)
-            count_xml += 1
+    r.raise_for_status()
+    try:
+        j = r.json()
+    except ValueError:
+        return []
 
-    return all_works
+    # ["query"]["pages"]["5827"]["revisions"][0]["*"]
+    pages = j.get("query", {}).get("pages", {})
+
+    """
+    imslp api returns a dictionary where page ids are the key values
+      -> this is different to the cpdl one
+    """
+    ret = []
+    for pageid, page in pages.items():
+        if pageid == "-1" and "missing" in page:
+            # TODO Logging
+            pass
+
+        title = page["title"]
+        revisions = page.get("revisions")
+        if revisions:
+            text = revisions[0].get("*")
+            ret.append({"title": title, "content": text})
+
+    return ret
 
 
 def api_all_pages():
@@ -320,17 +274,17 @@ def parse_imslp_date(year, month, day):
 
 
 @cache.dict()
-def api_composer_raw_query(composer_name):
-    composer_id = base64.b64encode(urllib.parse.quote(composer_name).encode("utf-8"))
-    composer_id = composer_id.decode('utf-8')
-    url = f"https://imslp.org/imslpscripts/API.ISCR.php?retformat=json/disclaimer=accepted/type=0/id={composer_id}"
+def imslp_api_raw_query(page_name):
+    page_id = base64.b64encode(urllib.parse.quote(page_name).encode("utf-8"))
+    page_id = page_id.decode('utf-8')
+    url = f"https://imslp.org/imslpscripts/API.ISCR.php?retformat=json/disclaimer=accepted/type=0/id={page_id}"
     r = s.get(url)
     return r.json()
 
 
 @cache.dict()
 def api_composer_get_relations(composer_name):
-    j = api_composer_raw_query(composer_name)
+    j = imslp_api_raw_query(composer_name)
 
     composer = j["0"]
     intvals = composer["intvals"]
@@ -358,7 +312,7 @@ def api_composer_get_relations(composer_name):
 def api_composer(composer_name):
     """Arguments:
           composer_name: an imslp Category name for a composer"""
-    j = api_composer_raw_query(composer_name)
+    j = imslp_api_raw_query(composer_name)
 
     composer = j["0"]
     extvals = composer["extvals"]
@@ -401,20 +355,14 @@ def api_composer(composer_name):
     }
 
 
-def main(category_names, output_name, select_mxml=True, page_name=None, num_pages=None):
+def api_work(work_name):
+    # Ach Gott vom Himmel sieh darein (Resinarius, Balthasar)
+    pass
 
-    works = set()
-    composers = set()
-    all_pages = None
-    for category in category_names:
-        pages = category_pagelist(category)
-        print(f"got {len(pages)} pages")
 
-        if all_pages is None:
-            all_pages = set(pages)
-        else:
-            all_pages = all_pages & set(pages)
-    print(f"intersection is {len(all_pages)} items")
-
-    works = scrape_imslp(all_pages, select_mxml, page_name, num_pages)
-    composers = scrape_composers(works)
+# List of pages
+# Get pages in bulk
+# for each page, see if there is an xml
+# for each xml, import
+#   - make api call (this is to get the composer)
+#   - return data with a combination of api data and mediawiki data

@@ -57,9 +57,10 @@ def load_artist_from_musicbrainz(artist_mbid):
     ret = []
     seen = set()
     for p in persons:
-        if p['source'] not in seen:
-            ret.append(p)
-            seen.add(p['source'])
+        if 'source' in p:
+            if p['source'] not in seen:
+                ret.append(p)
+                seen.add(p['source'])
     return ret
 
 
@@ -115,9 +116,10 @@ def load_artist_from_imslp(url):
     ret = []
     seen = set()
     for p in people:
-        if p['source'] not in seen:
-            ret.append(p)
-            seen.add(p['source'])
+        if 'source' in p:
+            if p['source'] not in seen:
+                ret.append(p)
+                seen.add(p['source'])
     return ret
 
 
