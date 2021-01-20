@@ -3,6 +3,7 @@ Basic use of the Muziekweb REST API.
 """
 import urllib.request, getpass
 from xml.dom import minidom
+import pdb
 
 """
 Constants for Muziekweb API
@@ -36,3 +37,33 @@ def get_album_information(key: str):
             return minidom.parseString(body)
 
     return None
+
+def get_track_information(key: str):
+    global _api_activated
+
+    if _api_activated:
+        # Use the Muziekweb API to retrieve all the tracks on the album
+        response  = urllib.request.urlopen(f"{MW_API_HOST}/singlesearch/singleSearch.xml?q={key}")
+        body = response.read()
+
+        if len(body) > 0:
+            # Return the xml as object
+            return minidom.parseString(body)
+
+    return None
+
+
+def get_artist_information(key: str):
+    global _api_activated
+
+    if _api_activated:
+        # Use the Muziekweb API to retrieve all the tracks on the album
+        response  = urllib.request.urlopen(f"{MW_API_HOST}/ExtendedInfo/v3/performerInfo.xml?performerLink={key}")
+        body = response.read()
+
+        if len(body) > 0:
+            # Return the xml as object
+            return minidom.parseString(body)
+
+    return None
+

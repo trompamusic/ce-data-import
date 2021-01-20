@@ -1,15 +1,15 @@
-"""Trompa MusicAlbum model
+"""Trompa AudioObject model
 """
 
 from dataclasses import dataclass
-from . import CE_BaseModel, MusicAlbum
+from . import CE_BaseModel, MusicRecording
 
 @dataclass
-class CE_MusicAlbum(MusicAlbum, CE_BaseModel):
+class CE_MusicComposition(CE_BaseModel, MusicRecording):
     """
-    Trompa MusicAlbum model
+    Trompa AudioObject model
 
-    Inherits from schema.org MusicAlbum
+    Inherits from schema.org AudioObject
     """
 
     def __init__(self, identifier: str, name: str, url: str, contributor: str, creator: str):

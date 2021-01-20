@@ -7,7 +7,7 @@ import trompace as ce
 from datetime import datetime, date
 from SPARQLWrapper import SPARQLWrapper, JSON
 from trompace.connection import submit_query
-from trompace.mutations.person import mutation_update_artist, mutation_create_artist
+from trompace.mutations.person import mutation_update_person, mutation_create_person
 from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
 
 from models import CE_Person
@@ -19,7 +19,7 @@ async def import_artist(keys: list):
     for key in keys:
         print(f"Retrieving artist with key {key} from Muziekweb")
         # Get data from Muziekweb
-        artist = await get_mw_artist(key)
+        artist = await get_mw_artist_sparql(key)
 
         if artist is None:
             print(f"No data received for {key}")
@@ -122,7 +122,8 @@ async def get_mw_artist(key: str) -> CE_Person:
     sparql.setQuery(qry)
 
     result = sparql.query().convert()["results"]["bindings"]
-
+    import pdb
+    pdb.set_trace()
     if len(result) > 0:
         # Now get Muziekweb data
         person = CE_Person(
@@ -141,3 +142,4 @@ async def get_mw_artist(key: str) -> CE_Person:
         return person
 
     return None
+

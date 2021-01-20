@@ -7,7 +7,7 @@ import trompace as ce
 from datetime import datetime, date
 from SPARQLWrapper import SPARQLWrapper, JSON
 from trompace.connection import submit_query
-from trompace.mutations.music_album import mutation_update_music_album, mutation_create_music_album
+#from trompace.mutations.music_album import mutation_update_music_album, mutation_create_music_album
 from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
 from models import CE_MusicAlbum
 from .audio_object import import_tracks
@@ -17,7 +17,8 @@ async def import_album(keys: list):
     Imports albums from Muziekweb for all given keys into the Trompa CE.
     """
     for key in keys:
-        ''' Not yet available in Trompa ce-client
+        '''
+        #Not yet available in Trompa ce-client
         print(f"Retrieving album with key {key} from Muziekweb")
         # Get data from Muziekweb
         album = await get_mw_album(key)

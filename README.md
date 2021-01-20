@@ -29,6 +29,10 @@ To import album information use:
 
     python import-mw.py -r JK90000
 
+To import a single track use:
+
+    python import-mw.py -r JK136417-0003
+
 The importer uses the Trompa CE client settings to connect and identify the
 responsible account for the import. When using custom settings, you can place a
 copy of the import.ini from the CE client in the root of this repository and

@@ -16,3 +16,4 @@ from .ce_base import CE_BaseModel
 from .ce_audio_object import CE_AudioObject
 from .ce_music_album import CE_MusicAlbum
 from .ce_person import CE_Person
+from .ce_music_composition import CE_MusicComposition

@@ -117,3 +117,4 @@ class CE_BaseModel():
     description: str = None
     _type: str = None
     _searchScore: float = None
+

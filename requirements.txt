@@ -8,3 +8,8 @@ SPARQLWrapper>=1.8.5
 websockets>=8.1
 python-dotenv>=0.13.0
 trompace-client
+Wikidata>=0.7.0
+redis>=3.5.3
+redis-decorato>=0.4
+beautifulsoup4>=4.9.3
+musicbrainzngs>=0.7.1

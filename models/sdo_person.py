@@ -349,3 +349,4 @@ class Person(Thing):
     weight = None
     workLocation = None
     worksFor = None
+    

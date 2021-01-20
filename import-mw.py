@@ -10,10 +10,13 @@ import os
 import argparse
 import asyncio
 import trompace as ce
+from trompace.config import config
 
 from muziekweb_api import set_api_account
-from importers import import_artist, import_album
+from importers import import_artist, import_album, import_tracks
 from dotenv import load_dotenv
+
+import pdb
 
 # Environment settings (defaults)
 load_dotenv()
@@ -25,7 +28,7 @@ mw_api_pass = os.environ["MW_API_PASS"] if "MW_API_PASS" in os.environ else None
 main_parser = argparse.ArgumentParser(description="Input data options:")
 main_parser.add_argument("-a", dest="artist", required=False, help="Muziekweb performer_id or input file with Muziekweb performer identifiers.")
 main_parser.add_argument("-r", dest="release", required=False, help="Muziekweb album_id or input file with Muziekweb albums release identifiers.")
-
+main_parser.add_argument("-t", dest="track", required=False, help="Muziekweb track_id or input file with Muziekweb albums track identifiers.")
 # Trompa CE
 main_parser.add_argument("-ce", dest="ce_host", required=False, help="Trompa CE host.")
 main_parser.add_argument("-ceu", dest="ce_user", required=False, help="Trompa CE username.")
@@ -41,6 +44,7 @@ args = main_parser.parse_args()
 # Import options
 source_artist = None if args.artist is None else args.artist.strip(" \n\t\"")
 source_release = None if args.release is None else args.release.strip(" \n\t\"")
+source_track = None if args.track is None else args.track.strip(" \n\t\"")
 
 # Trompa CE
 trompa_ce_host = trompa_ce_host if args.ce_host is None else args.ce_host
@@ -69,12 +73,8 @@ if __name__ == "__main__":
 
 
     # Trompa Example (not working yet)
-    config_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'import.ini')
-    if os.path.exists(config_file):
-        ce.config.config.read_config(config_file)
-    else:
-        _proto, _server = trompa_ce_host.split("://")
-        ce.config.config.set_server(_server, (_proto == "https"))
+    config_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'trompace.ini')
+    config.load(config_file)
 
 
     # Set the Muziekweb API account
@@ -82,5 +82,14 @@ if __name__ == "__main__":
         set_api_account(mw_api_user, mw_api_pass)
 
     # Import Muziekweb artists into the Trompa CE
-    #asyncio.run(import_artist(readKeys(source_artist)))
-    asyncio.run(import_album(readKeys(source_release)))
+    # asyncio.run(import_artist(readKeys(source_artist)))
+    # asyncio.run(import_album(readKeys(source_release)))
+
+    # pdb.set_trace()
+    # asyncio python < 3.7
+    loop = asyncio.get_event_loop()
+    # import composer
+    # result = loop.run_until_complete(import_tracks(source_artist))
+
+    # import work
+    result = loop.run_until_complete(import_tracks(source_track))
