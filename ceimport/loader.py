@@ -9,7 +9,7 @@ from trompace.queries import musiccomposition as query_musiccomposition
 from trompace.queries import mediaobject as query_mediaobject
 
 from ceimport import connection, logger
-from ceimport.sites import musicbrainz
+from ceimport.sites import musicbrainz, cpdl
 from ceimport.sites import viaf
 from ceimport.sites import imslp
 from ceimport.sites import wikidata
@@ -75,7 +75,8 @@ def load_artist_from_imslp(url):
     people = []
 
     imslp_person = imslp.api_composer(url)
-    people.append(imslp_person)
+    if imslp_person:
+        people.append(imslp_person)
 
     rels = imslp.api_composer_get_relations(url)
     if 'worldcat' in rels:
@@ -313,8 +314,8 @@ def load_musiccomposition_from_musicbrainz(work_mbid):
         link_musiccomposition_and_composers(part_id, composer_ids)
 
 
-def load_musiccomposition_from_imslp(imslp_url, need_xml):
-    """Load a MusicComposition from a page on IMSLP,
+def load_musiccomposition_from_imslp_url(imslp_url, need_xml):
+    """Load a MusicComposition from a single page on IMSLP,
     and also load any musicxml files as MediaObjects
     TODO: Should be able to specify what to download, e.g. a specific PDF, or all files, or only music xmls
     TODO: Should be able to specify a Special:ReverseLookup url which gives the composition and file
@@ -333,3 +334,67 @@ def load_musiccomposition_from_imslp(imslp_url, need_xml):
             link_musiccomposition_and_mediaobject(composition_id, mediaobject_id)
     else:
         logger.info(" - No xml files, skipping")
+
+
+def import_cpdl_composers_for_category(cpdl_category):
+    """Given a category in CPDL, find all of its works. Then, filter to only include works
+    with a musicxml file and get a unique list of composers for these works.
+    For each composer, import it along with links to imslp and wikipedia if they exist."""
+
+    titles = cpdl.get_titles_in_category(cpdl_category)
+    wikitext = cpdl.get_wikitext_for_titles(titles)
+    xmlwikitext = cpdl.get_works_with_xml(wikitext)
+    composers = cpdl.get_composers_for_works(xmlwikitext)
+    composerwikitext = cpdl.get_wikitext_for_titles(composers)
+
+    total = len(composerwikitext)
+    for i, composer in enumerate(composerwikitext, 1):
+        logger.info("Importing CPDL composer %s/%s %s", i, total, composer['title'])
+        person = cpdl.composer_wikitext_to_person(composer)
+        person_cpdl = person['cpdl']
+        persons = [person_cpdl]
+
+        if person['imslp']:
+            person_imslp = load_artist_from_imslp(person['imslp'])
+            persons.extend(person_imslp)
+        if person['wikipedia']:
+            wikidata_id = wikidata.get_wikidata_id_from_wikipedia_url(person['wikipedia'])
+            if wikidata_id:
+                wd_person = wikidata.load_person_from_wikidata(wikidata_id)
+                if wd_person:
+                    persons.append(wd_person)
+                wp_person = wikidata.load_person_from_wikipedia(wikidata_id, 'en')
+                if wp_person:
+                    persons.append(wp_person)
+        create_persons_and_link(persons)
+
+
+def import_cpdl_works_for_category(cpdl_category):
+    """Given a category in CPDL, find all of its works. Then, filter to only include works
+    with a musicxml file. Import each of these works and the xml files.
+    This assumes that import_cpdl_composers_for_category has been run first and that Person
+    objects exist in the CE for each Composer"""
+
+    titles = cpdl.get_titles_in_category(cpdl_category)
+    wikitext = cpdl.get_wikitext_for_titles(titles)
+    xmlwikitext = cpdl.get_works_with_xml(wikitext)
+
+    xmlwikitext = xmlwikitext[-4000:]
+    total = len(xmlwikitext)
+    for i, work in enumerate(xmlwikitext, 1):
+        logger.info("Importing CPDL work %s/%s %s", i, total, work['title'])
+        composition = cpdl.composition_wikitext_to_music_composition(work)
+        composer = composition['composer']
+        if composer is not None:
+            source = f'https://cpdl.org/wiki/index.php/{composer.replace(" ", "_")}'
+            existing_composer_ceid = get_existing_person_by_source(source)
+            if existing_composer_ceid:
+                musiccomp_ceid = get_or_create_musiccomposition(composition['work'])
+                link_musiccomposition_and_composers(musiccomp_ceid, [existing_composer_ceid])
+                mediaobjects = cpdl.composition_wikitext_to_mediaobjects(work)
+                for mo in mediaobjects:
+                    mediaobject_ceid = get_or_create_mediaobject(mo)
+                    link_musiccomposition_and_mediaobject(composition_id=musiccomp_ceid,
+                                                          mediaobject_id=mediaobject_ceid)
+            else:
+                logger.info(" - missing composer?")

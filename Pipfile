@@ -16,6 +16,9 @@ pymediawiki = "*"
 lxml = "*"
 click = "*"
 redis-decorator = "*"
+ipython = "*"
+mwparserfromhell = "*"
+jedi = "==0.17.2"
 
 [requires]
 python_version = "3.7"
