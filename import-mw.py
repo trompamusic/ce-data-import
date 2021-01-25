@@ -7,6 +7,7 @@ Copyright 2019, C. Karreman
 Licensed under GPLv3.
 """
 import os
+import sys
 import argparse
 import asyncio
 import trompace as ce
@@ -16,7 +17,6 @@ from muziekweb_api import set_api_account
 from importers import import_artist, import_album, import_tracks
 from dotenv import load_dotenv
 
-import pdb
 
 # Environment settings (defaults)
 load_dotenv()
@@ -82,14 +82,20 @@ if __name__ == "__main__":
         set_api_account(mw_api_user, mw_api_pass)
 
     # Import Muziekweb artists into the Trompa CE
-    # asyncio.run(import_artist(readKeys(source_artist)))
-    # asyncio.run(import_album(readKeys(source_release)))
-
-    # pdb.set_trace()
-    # asyncio python < 3.7
-    loop = asyncio.get_event_loop()
-    # import composer
-    # result = loop.run_until_complete(import_tracks(source_artist))
-
-    # import work
-    result = loop.run_until_complete(import_tracks(source_track))
+    # asyncio for python >= 3.8
+    if sys.version_info[0] == 3 and sys.version_info[1] >= 8:
+        if source_artist is not None:
+            asyncio.run(import_artist(source_artist))
+        elif source_release is not None:
+            asyncio.run(import_album(source_release))
+        elif source_track is not None:
+            asyncio.run(import_tracks(source_track))
+    else:
+        # asyncio for python < 3.7
+        loop = asyncio.get_event_loop()
+        if source_artist is not None:
+            result = loop.run_until_complete(import_artist(source_artist))
+        elif source_release is not None:
+            result = loop.run_until_complete(import_album(source_release))
+        elif source_track is not None:
+            result = loop.run_until_complete(import_tracks(source_track))

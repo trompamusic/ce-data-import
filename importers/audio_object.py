@@ -11,8 +11,14 @@ from trompace.mutations.musiccomposition import mutation_update_music_compositio
 from trompace.mutations.person import mutation_update_person, mutation_create_person, mutation_person_add_exact_match_person
 from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
 
+
 from models import CE_AudioObject, CE_Person, CE_MusicComposition
 from muziekweb_api import get_album_information, get_track_information, get_artist_information
+
+# from ceimport.sites.isni import load_person_from_isni
+# from ceimport.sites.musicbrainz import load_person_from_musicbrainz
+# from ceimport.sites.viaf import load_person_from_viaf
+# from ceimport.sites.wikidata import load_person_from_wikidata, load_person_from_wikipedia
 from importers.isni import load_person_from_isni
 from importers.musicbrainz import load_person_from_musicbrainz
 from importers.viaf import load_person_from_viaf
@@ -22,7 +28,6 @@ import itertools
 MW_AUDIO_URL = "https://www.muziekweb.nl/Embed/{}"
 MW_MUSIC_URL = "https://www.muziekweb.nl/en/Link/{}/{}/{}"
 
-import pdb
 
 async def import_tracks(key: str):
     """
@@ -47,33 +52,14 @@ async def import_tracks(key: str):
         person.identifier = await lookupIdentifier("Person", person.source)
         
         if person.identifier is not None:
-            print(f"Updating person {person.identifier} in Trompa CE\n", end="")
+            print(f"Updating person {person.identifier} in Trompa CE\n")
 
-            response = await ce.connection.submit_query_async(mutation_update_person(
-                identifier=person.identifier,
-                title=person.title,
-                contributor=person.contributor,
-                creator=person.creator,
-                format_=person.format,
-                name=person.name,
-                family_name=person.familyName,
-                given_name=person.givenName,
-                description=person.description,
-                image=person.image,
-                publisher=person.publisher,
-                honorific_prefix=person.honorificPrefix,
-                honorific_suffix=person.honorificSuffix,
-                gender=person.gender,
-                job_title=person.jobTitle,
-                language=person.language,
-                birth_date=person.birthDate,
-                death_date=person.deathDate,
-                source=person.source,
-            ))
+
+            response = await ce.connection.submit_query_async(mutation_update_person(**person.as_dict()))
             person.identifier = response["data"]["UpdatePerson"]["identifier"]
             list_person_ids.append(person.identifier)
         else:
-            print("Inserting new person {person.name} in Trompa CE\n", end="")
+            print("Inserting new person {} in Trompa CE\n".format(person.name))
 
             response = await ce.connection.submit_query_async(mutation_create_person(
                 title=person.title,
@@ -117,25 +103,14 @@ async def import_tracks(key: str):
     for work in music_works:
 
         work.identifier = await lookupIdentifier("MusicComposition", work.source)
-        # print(track)
         
         if work.identifier is not None:
             print(f"Updating work {work.identifier} in Trompa CE\n", end="")
 
-            response = await ce.connection.submit_query_async(mutation_update_music_composition(
-                identifier=work.identifier,
-                title=work.title,
-                name=work.name,
-                creator=work.creator,
-                contributor=work.contributor,
-                format_=work.format,
-                source=work.source,
-                subject=work.name,
-                language=work.language,
-            ))
+            response = await ce.connection.submit_query_async(mutation_update_music_composition(**work.as_dict()))
             work.identifier = response["data"]["UpdateMusicComposition"]["identifier"]
         else:
-            print("Inserting new work {work.name} in Trompa CE\n", end="")
+            print("Inserting new work {} in Trompa CE\n".format(work.name))
 
             response = await ce.connection.submit_query_async(mutation_create_music_composition(
                 title=work.title,
@@ -169,28 +144,14 @@ async def import_tracks(key: str):
     for track in tracks:
 
         track.identifier = await lookupIdentifier("AudioObject", track.source)
-        # print(track)
         
         if track.identifier is not None:
-            print(f"Updating record {track.identifier} in Trompa CE\n", end="")
+            print(f"Updating record {track.identifier} in Trompa CE\n")
 
-            response = await ce.connection.submit_query_async(mutation_update_audio_object(
-                identifier=track.identifier,
-                title=track.title,
-                description=track.description,
-                date=date.today(),
-                creator=track.creator,
-                contributor=track.contributor,
-                format_=track.format,
-                encodingFormat=track.format,
-                source=track.source,
-                subject=track.name,
-                contentUrl=track.contentUrl,
-                language=track.language
-            ))
+            response = await ce.connection.submit_query_async(mutation_update_audio_object(**track.as_dict()))
             track.identifier = response["data"]["UpdateAudioObject"]["identifier"]
         else:
-            print("Inserting new track {track.title} in Trompa CE\n", end="")
+            print("Inserting new track {} in Trompa CE\n".format(track.title))
 
             response = await ce.connection.submit_query_async(mutation_create_audio_object(
                 name=track.name,
@@ -417,6 +378,8 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                             contributor = 'https://www.discogs.com/'
                         elif prov_name == 'LASTFM':
                             contributor = 'https://www.last.fm/'
+                        else:
+                            continue
 
                         person = CE_Person(
                             identifier = None,

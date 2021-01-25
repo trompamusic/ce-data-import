@@ -122,8 +122,7 @@ async def get_mw_artist(key: str) -> CE_Person:
     sparql.setQuery(qry)
 
     result = sparql.query().convert()["results"]["bindings"]
-    import pdb
-    pdb.set_trace()
+
     if len(result) > 0:
         # Now get Muziekweb data
         person = CE_Person(

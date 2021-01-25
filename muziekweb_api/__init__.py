@@ -3,7 +3,6 @@ Basic use of the Muziekweb REST API.
 """
 import urllib.request, getpass
 from xml.dom import minidom
-import pdb
 
 """
 Constants for Muziekweb API
@@ -25,7 +24,7 @@ def set_api_account(user, password):
 
 
 def get_album_information(key: str):
-    global _api_activated
+    # global _api_activated
 
     if _api_activated:
         # Use the Muziekweb API to retrieve all the tracks on the album
@@ -39,7 +38,7 @@ def get_album_information(key: str):
     return None
 
 def get_track_information(key: str):
-    global _api_activated
+    # global _api_activated
 
     if _api_activated:
         # Use the Muziekweb API to retrieve all the tracks on the album
@@ -54,7 +53,7 @@ def get_track_information(key: str):
 
 
 def get_artist_information(key: str):
-    global _api_activated
+    # global _api_activated
 
     if _api_activated:
         # Use the Muziekweb API to retrieve all the tracks on the album

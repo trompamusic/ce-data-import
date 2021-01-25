@@ -2,10 +2,10 @@
 """
 
 from dataclasses import dataclass
-from . import CE_BaseModel, MusicRecording
+from . import CE_BaseModel, CreativeWork
 
 @dataclass
-class CE_MusicComposition(CE_BaseModel, MusicRecording):
+class CE_MusicComposition(CE_BaseModel, CreativeWork):
     """
     Trompa AudioObject model
 
@@ -15,3 +15,16 @@ class CE_MusicComposition(CE_BaseModel, MusicRecording):
     def __init__(self, identifier: str, name: str, url: str, contributor: str, creator: str):
         CE_BaseModel.__init__(self, identifier, name, url, contributor, creator)
         self.format = "text/html"
+
+
+    def as_dict(self):
+        return {"identifier": self.identifier,
+                "title": self.title,
+                "name": self.name,
+                "creator": self.creator,
+                "contributor": self.contributor,
+                "format_": self.format,
+                "source": self.source,
+                "subject": self.name,
+                "language": self.language,
+                }
