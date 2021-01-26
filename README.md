@@ -20,16 +20,7 @@ To install the package dependencies run:
 ## Running the application
 
 To import data from Muziekweb into the Trompa CE start the import-mw.py script
-with the nescessary parameters. For example to import an artist identified by
-the Muziekweb identifier 'M00000238467':
-
-    python import-mw.py -a M00000238467
-
-To import album information use:
-
-    python import-mw.py -r JK90000
-
-To import a single track use:
+with the nescessary parameters. For example To import a single track use:
 
     python import-mw.py -t JK136417-0003
 

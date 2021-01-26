@@ -26,8 +26,8 @@ mw_api_pass = os.environ["MW_API_PASS"] if "MW_API_PASS" in os.environ else None
 
 # Construct the argument parser and parse the arguments
 main_parser = argparse.ArgumentParser(description="Input data options:")
-main_parser.add_argument("-a", dest="artist", required=False, help="Muziekweb performer_id or input file with Muziekweb performer identifiers.")
-main_parser.add_argument("-r", dest="release", required=False, help="Muziekweb album_id or input file with Muziekweb albums release identifiers.")
+# main_parser.add_argument("-a", dest="artist", required=False, help="Muziekweb performer_id or input file with Muziekweb performer identifiers.")
+# main_parser.add_argument("-r", dest="release", required=False, help="Muziekweb album_id or input file with Muziekweb albums release identifiers.")
 main_parser.add_argument("-t", dest="track", required=False, help="Muziekweb track_id or input file with Muziekweb albums track identifiers.")
 # Trompa CE
 main_parser.add_argument("-ce", dest="ce_host", required=False, help="Trompa CE host.")
@@ -42,8 +42,8 @@ main_parser.add_argument("-mwp", dest="mw_api_pass", required=False, help="The p
 # Startup defaults or parameterized values
 args = main_parser.parse_args()
 # Import options
-source_artist = None if args.artist is None else args.artist.strip(" \n\t\"")
-source_release = None if args.release is None else args.release.strip(" \n\t\"")
+# source_artist = None if args.artist is None else args.artist.strip(" \n\t\"")
+# source_release = None if args.release is None else args.release.strip(" \n\t\"")
 source_track = None if args.track is None else args.track.strip(" \n\t\"")
 
 # Trompa CE
@@ -76,6 +76,9 @@ if __name__ == "__main__":
     config_file = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'trompace.ini')
     config.load(config_file)
 
+    if mw_api_user is None or mw_api_pass is None:
+        print('Add Muziekweb user and password to a .env file as with .env.example')
+        sys.exit(0)
 
     # Set the Muziekweb API account
     if mw_api_user is not None and mw_api_pass is not None:
@@ -84,18 +87,18 @@ if __name__ == "__main__":
     # Import Muziekweb artists into the Trompa CE
     # asyncio for python >= 3.8
     if sys.version_info[0] == 3 and sys.version_info[1] >= 8:
-        if source_artist is not None:
-            asyncio.run(import_artist(source_artist))
-        elif source_release is not None:
-            asyncio.run(import_album(source_release))
-        elif source_track is not None:
-            asyncio.run(import_tracks(source_track))
+        # if source_artist is not None:
+        #     asyncio.run(import_artist(source_artist))
+        # elif source_release is not None:
+        #     asyncio.run(import_album(source_release))
+        # elif source_track is not None:
+        asyncio.run(import_tracks(source_track))
     else:
         # asyncio for python < 3.7
         loop = asyncio.get_event_loop()
-        if source_artist is not None:
-            result = loop.run_until_complete(import_artist(source_artist))
-        elif source_release is not None:
-            result = loop.run_until_complete(import_album(source_release))
-        elif source_track is not None:
-            result = loop.run_until_complete(import_tracks(source_track))
+        # if source_artist is not None:
+        #     result = loop.run_until_complete(import_artist(source_artist))
+        # elif source_release is not None:
+        #     result = loop.run_until_complete(import_album(source_release))
+        # elif source_track is not None:
+        result = loop.run_until_complete(import_tracks(source_track))

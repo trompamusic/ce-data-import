@@ -18,13 +18,15 @@ class CE_MusicComposition(CE_BaseModel, CreativeWork):
 
 
     def as_dict(self):
-        return {"identifier": self.identifier,
-                "title": self.title,
-                "name": self.name,
-                "creator": self.creator,
-                "contributor": self.contributor,
-                "format_": self.format,
-                "source": self.source,
-                "subject": self.name,
-                "language": self.language,
-                }
+        d = {"title": self.title,
+             "name": self.name,
+             "creator": self.creator,
+             "contributor": self.contributor,
+             "format_": self.format,
+             "source": self.source,
+             "subject": self.name,
+             "language": self.language,
+             }
+        if self.identifier is not None:
+            d['identifier'] = self.identifier
+        return d

@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 from . import CE_BaseModel, AudioObject
+from datetime import datetime, date
 
 @dataclass
 class CE_AudioObject(CE_BaseModel, AudioObject):
@@ -18,16 +19,18 @@ class CE_AudioObject(CE_BaseModel, AudioObject):
 
 
     def as_dict(self):
-        return {"identifier": self.identifier,
-                "title": self.title,
-                "description": self.description,
-                "date": date.today(),
-                "creator": self.creator,
-                "contributor": self.contributor,
-                "format_": self.format,
-                "encodingFormat": self.format,
-                "source": self.source,
-                "subject": self.name,
-                "contentUrl": self.contentUrl,
-                "language": self.language
-                }
+        d = {"title": self.title,
+             "description": self.description,
+             "date": date.today(),
+             "creator": self.creator,
+             "contributor": self.contributor,
+             "format_": self.format,
+             "encodingFormat": self.format,
+             "source": self.source,
+             "subject": self.name,
+             "contentUrl": self.contentUrl,
+             "language": self.language
+             }
+        if self.identifier is not None:
+            d['identifier'] = self.identifier
+        return d

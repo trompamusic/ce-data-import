@@ -4,7 +4,6 @@ Muziekweb music fragment importer
 import json
 import trompace as ce
 
-from datetime import datetime, date
 from trompace.connection import submit_query
 from trompace.mutations.audioobject import mutation_update_audio_object, mutation_create_audio_object, mutation_merge_audio_object_work_example
 from trompace.mutations.musiccomposition import mutation_update_music_composition, mutation_create_music_composition, mutation_merge_music_composition_composer
@@ -50,7 +49,7 @@ async def import_tracks(key: str):
     for person in persons:
 
         person.identifier = await lookupIdentifier("Person", person.source)
-        
+
         if person.identifier is not None:
             print(f"Updating person {person.identifier} in Trompa CE\n")
 
@@ -61,26 +60,7 @@ async def import_tracks(key: str):
         else:
             print("Inserting new person {} in Trompa CE\n".format(person.name))
 
-            response = await ce.connection.submit_query_async(mutation_create_person(
-                title=person.title,
-                contributor=person.contributor,
-                creator=person.creator,
-                format_=person.format,
-                name=person.name,
-                family_name=person.familyName,
-                given_name=person.givenName,
-                description=person.description,
-                image=person.image,
-                publisher=person.publisher,
-                honorific_prefix=person.honorificPrefix,
-                honorific_suffix=person.honorificSuffix,
-                gender=person.gender,
-                job_title=person.jobTitle,
-                language=person.language,
-                birth_date=person.birthDate,
-                death_date=person.deathDate,
-                source=person.source,
-            ))
+            response = await ce.connection.submit_query_async(mutation_create_person(**person.as_dict()))
 
             person.identifier = response["data"]["CreatePerson"]["identifier"]
             list_person_ids.append(person.identifier)
@@ -112,17 +92,7 @@ async def import_tracks(key: str):
         else:
             print("Inserting new work {} in Trompa CE\n".format(work.name))
 
-            response = await ce.connection.submit_query_async(mutation_create_music_composition(
-                title=work.title,
-                name=work.name,
-                creator=work.creator,
-                contributor=work.contributor,
-                format_=work.format,
-                source=work.source,
-                subject=work.name,
-                language=work.language,
-            ))
-
+            response = await ce.connection.submit_query_async(mutation_create_music_composition(**work.as_dict()))
             work.identifier = response["data"]["CreateMusicComposition"]["identifier"]
 
     print(f"Importing music composition {work.identifier} done.\n")
@@ -153,21 +123,7 @@ async def import_tracks(key: str):
         else:
             print("Inserting new track {} in Trompa CE\n".format(track.title))
 
-            response = await ce.connection.submit_query_async(mutation_create_audio_object(
-                name=track.name,
-                title=track.title,
-                description=track.description,
-                date=date.today(),
-                creator=track.creator,
-                contributor=track.contributor,
-                format_=track.format,
-                encodingFormat=track.format,
-                source=track.source,
-                subject=track.name,
-                contentUrl=track.contentUrl,
-                language=track.language
-            ))
-
+            response = await ce.connection.submit_query_async(mutation_create_audio_object(**track.as_dict()))
             track.identifier = response["data"]["CreateAudioObject"]["identifier"]
 
     print(f"Importing tracks {track.identifier} done.\n")
@@ -245,13 +201,11 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                 audio_object.description = 'Embed in frame using the following code: <iframe width="300" height="30" src="[url]" frameborder="no" scrolling="no" allowtransparency="true"></iframe>'
 
                 audio_objects.append(audio_object)
-                # print(audio_objects)
 
                 # append musicwork
                 unif_title = track.getElementsByTagName('UniformTitle')[0].attributes['Link'].value
                 unif_text = track.getElementsByTagName('UniformTitle')[0].firstChild.data.replace(' ', '-')
                 unif_style = track.getElementsByTagName('Catalogue')[0].firstChild.data.split(' ')[0]
-                # print(MW_MUSIC_URL.format(unif_title, unif_style, unif_text))
                 
                 music_work = CE_MusicComposition(
                     identifier = None,
@@ -266,7 +220,6 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                 music_work.source = MW_MUSIC_URL.format(unif_title, unif_style, unif_text)
 
                 music_works.append(music_work)
-                # print(music_works)
                 # append persons
                 perf_link = track.getElementsByTagName('Performer')[0].attributes['Link'].value
                 doc_artist = get_artist_information(perf_link)
