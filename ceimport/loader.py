@@ -234,7 +234,7 @@ def link_person_ids(person_ids):
 
 
 def link_musiccomposition_and_mediaobject(composition_id, mediaobject_id):
-    query = mutation_mediaobject.mutation_merge_media_object_work_example(mediaobject_id, composition_id)
+    query = mutation_mediaobject.mutation_merge_mediaobject_example_of_work(mediaobject_id, composition_id)
     connection.submit_request(query)
 
 
