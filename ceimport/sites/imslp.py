@@ -1,21 +1,40 @@
 import base64
 import json
+import random
+import re
 import sys
+import time
 import urllib
 from typing import List
 
 from bs4 import BeautifulSoup
 import requests
+import requests_cache
 from mediawiki import mediawiki
 import mwparserfromhell as mwph
 from requests.adapters import HTTPAdapter
 
-from ceimport import cache, chunks
+from ceimport import chunks
 
-s = requests.Session()
+
+def make_throttle_hook():
+    """
+    Returns a response hook function which sleeps for `timeout` seconds if
+    response is not cached
+    """
+    def hook(response, *args, **kwargs):
+        if not getattr(response, 'from_cache', False):
+            print('sleeping')
+            time.sleep(random.randint(500, 3000) / 1000.0)
+        return response
+    return hook
+
+
+session = requests_cache.CachedSession()
+session.hooks = {'response': make_throttle_hook()}
 adapter = HTTPAdapter(max_retries=5)
-s.mount("https://", adapter)
-s.mount("http://", adapter)
+session.mount("https://", adapter)
+session.mount("http://", adapter)
 
 
 def get_titles_in_category(mw, category):
@@ -39,7 +58,7 @@ def read_source(source: str) -> str:
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
-    r = s.get(source, headers=headers)
+    r = session.get(source, headers=headers)
     try:
         r.raise_for_status()
         return r.text
@@ -47,9 +66,18 @@ def read_source(source: str) -> str:
         return None
 
 
+def get_page_title(source):
+    page = read_source(source)
+    if page is not None:
+        bs = BeautifulSoup(page, features="lxml")
+        title = bs.find("title")
+        if title:
+            return title.text
+
+
 def special_link_to_download_url(special_link, download_id):
     url = ""
-    r = s.get(url, cookies={"imslpdisclaimeraccepted": "yes"}, allow_redirects=False)
+    r = session.get(url, cookies={"imslpdisclaimeraccepted": "yes"}, allow_redirects=False)
     location = r.headers['Location']
     return location
 
@@ -93,8 +121,7 @@ def get_wiki_content_for_pages(pages: List[str]):
     }
     url = 'https://imslp.org/api.php'
 
-    r = requests.get(url, params=params)
-    print(url)
+    r = session.get(url, params=params)
 
     r.raise_for_status()
     try:
@@ -133,7 +160,7 @@ def api_all_pages():
     while hasnext:
         url = base_url.format(start)
         print(url)
-        r = requests.get(url)
+        r = session.get(url)
         j = r.json()
         metadata = j.get('metadata', {})
         if metadata:
@@ -147,47 +174,33 @@ def api_all_pages():
         json.dump(alldata, fp)
 
 
-def api_composers_for_works(all_pages_file, works_file):
-    """Given a file ``all_pages_file`` from api_all_pages, and a list of works in `works_file`,
-    return a unique list of composer categories for all of these works"""
-    with open(all_pages_file) as fp:
-        j = json.load(fp)
-
-    with open(works_file) as fp:
-        works = set(fp.read().splitlines())
-    composers = set()
-    for work in j:
-        if work['id'] in works:
-            composers.add(work['parent'])
-
-    return sorted(list(composers))
-
-
 def parse_imslp_date(year, month, day):
     """Return a date from imslp. Only return if all 3 components exist, and are integers
     This prevents parsing items that only have some components (e.g. yyyy-mm), or approximate
     values (e.g. c 1600)"""
     if year and month and day:
         try:
-            int(year)
-            int(month)
-            int(day)
-            return f"{year}-{month}-{day}"
+            year = int(year)
+            month = int(month)
+            day = int(day)
+            return f"{year:d}-{month:02d}-{day:02d}"
         except ValueError:
             return None
 
 
-@cache.dict()
 def imslp_api_raw_query(page_name):
     """Use the custom IMSLP API to get some parsed metadata for a page"""
     page_id = base64.b64encode(urllib.parse.quote(page_name).encode("utf-8"))
     page_id = page_id.decode('utf-8')
     url = f"https://imslp.org/imslpscripts/API.ISCR.php?retformat=json/disclaimer=accepted/type=0/id={page_id}"
-    r = s.get(url)
-    return r.json()
+    r = session.get(url)
+    try:
+        return r.json()
+    except ValueError:
+        print(r.text)
+    return {}
 
 
-@cache.dict()
 def api_composer_get_relations(composer_name):
     j = imslp_api_raw_query(composer_name)
     if "0" not in j:
@@ -215,7 +228,6 @@ def api_composer_get_relations(composer_name):
     return external_relations
 
 
-@cache.dict()
 def api_composer(composer_name):
     """
     Load a composer from ISMLP and return a dictionary adequate to create a Person on the CE
@@ -243,12 +255,8 @@ def api_composer(composer_name):
 
     # Make a second query to get the actual html title
     page = read_source(composer_source)
-    title = None
     if page is not None:
-        bs = BeautifulSoup(page, features="lxml")
-        title = bs.find("title")
-        if title:
-            title = title.text
+        title = get_page_title(composer_source)
 
         return {
             'contributor': 'https://imslp.org/',
@@ -271,24 +279,16 @@ def api_composer(composer_name):
 def api_work(work_name):
     """Load a work from IMSLP and return a dict adequate to load MusicComposition into CE
 
-
     There are two places where we can get metadata from:
        - one is the wikitext of the page
        - the other is the IMSLP API for a page, given the base64 of a title
        https://imslp.org/imslpscripts/API.ISCR.php?retformat=json/disclaimer=accepted/type=0/id=VmFyaWF0aW9ucyBhbmQgRnVndWUgaW4gRS1mbGF0IG1ham9yLCBPcC4zNSAoQmVldGhvdmVuLCBMdWR3aWcgdmFuKQ==
     """
-    # Ach Gott vom Himmel sieh darein (Resinarius, Balthasar)
-    pass
 
-
-def get_composition_page(source):
-    """
-    Returns: Work dict, composer url
-    """
-
-    title = "Affer opem (Lange, Gregor) - IMSLP: Free Sheet Music PDF Download"
-    if source.startswith("//"):
-        source = 'https:' + source
+    url = "https://imslp.org/wiki/" + work_name.replace(" ", "_")
+    html_page = read_source(url)
+    api_page = imslp_api_raw_query(work_name)
+    api_page = api_page.get('0', {})
 
     language_mapping = {'english': 'en',
                         'german': 'de',
@@ -296,34 +296,190 @@ def get_composition_page(source):
                         'french': 'fr',
                         'dutch': 'nl',
                         'catalan': 'ca'}
-    language_code = None
-    if language:
-        language_code = language_mapping.get(language.lower())
-        if language_code is None:
-            print(f"No mapping for language {language}")
 
-    return {'title': title,
+    if html_page is not None:
+        title = get_page_title(url)
+
+        inlanguage = None
+        language = api_page.get('extvals', {}).get('Language')
+        if language:
+            inlanguage = language_mapping.get(language.lower())
+            if inlanguage is None:
+                print(f"No mapping for language {language}")
+
+        name = api_page.get('extvals', {}).get('Work Title')
+        composer = api_page.get('parent')
+
+        work_dict = {
+            'title': title,
             'name': name,
-            'source': source,
-            'format_': 'text/html',
             'contributor': 'https://imslp.org',
-            'language': language_code,
-            }, composer
-
-    title = f"{wikitext['title']} - ChoralWiki"
-    work_dict = {
-        # This is the title of the page, so it includes the header
-        'title': title,
-        'name': name,
-        'contributor': 'https://cpdl.org/',
-        'source': f'https://cpdl.org/wiki/index.php/{url}',
-        'format_': 'text/html',
-        'language': 'en',
-        'inlanguage': inlanguage
-    }
+            'source': url,
+            'format_': 'text/html',
+            'language': 'en',
+            'inlanguage': inlanguage
+        }
+    else:
+        work_dict = {}
+        composer = ""
 
     return {"work": work_dict,
             "composer": composer}
+
+
+def files_for_work(work_wikitext):
+    """Get MediaObject information for files relevant to the work
+
+    If the work has an xml file, get the xml and the pdf associated with it
+
+    Arguments:
+        work_wikitext: the result of get_wiki_content_for_pages of a work
+    """
+    parsed = mwph.parse(work_wikitext["content"])
+
+    # A page should have one node, the #fte:imslppage template
+    nodes = parsed.nodes
+    assert len(nodes) == 1
+    node = nodes[0]
+
+    # One of the parameters in this template is ' *****FILES***** '
+    files_param = None
+    for param in node.params:
+        if param.name == ' *****FILES***** ':
+            files_param = param
+            break
+
+    # the .value of this parameter is another Wikicode
+    if files_param:
+        files = files_param.value
+        # There are another number of nodes in this Wikicode
+        # Some are text, and some are #fte:imslpfile templates
+        # We go looking for the #fte:imslpfile template that has an xml file in it,
+        # and keep track of the previous node, which should be the title
+        last_node = None
+        xml_node = None
+        for node in files.nodes:
+            is_xml_node = False
+            if hasattr(node, 'name') and node.name.strip() == "#fte:imslpfile":
+                for fileparam in node.params:
+                    if "File Description" in fileparam.name and "XML" in fileparam.value:
+                        is_xml_node = True
+                        break
+                if is_xml_node:
+                    xml_node = node
+                    break
+            last_node = node
+
+    else:
+        xml_node = last_node = None
+
+
+
+    """
+    {{#fte:imslpfile\n|File Name 1=PMLP180570-WeeLamAllparts.pdf\n|File Name 2=PMLP180570-WeeLam.zip\n|
+    File Description 1=Complete score and parts\n|File Description 2=Engraving files (Finale & XML)\n|
+    Page Count 1=\n|Page Count 2=\n|Arranger={{LinkArr|Michel|Rondeau}}\n|Image Type=Typeset\n|S
+    canner=Michel Rondeau\n|Uploader=[[User:Michrond|Michrond]]\n|Date Submitted=2013/1/15\n|
+    Publisher Information=Michel Rondeau\n|Copyright=Creative Commons Attribution Non-commercial Share Alike 3.0\n|
+    Misc. Notes={{WIMAProject}}\n}}
+    
+    For each of the files:
+      - get filename
+      - optional: Person who published, date
+      - source: File: + filename
+      - title: get html of page and get <title>
+      - url: work_wikitext['title'] + filename -> special recerselookup
+      - name: filename
+    
+    
+    """
+
+    mediaobjects = []
+    if xml_node:
+        node_to_dict = {str(n.name): str(n.value).strip() for n in xml_node.params}
+        num_files = len([n.name for n in xml_node.params if str(n).startswith("File Name")])
+
+        desc_match = re.search("=====(.*)=====", str(last_node))
+        if desc_match:
+            desc_match = desc_match.group(1)
+
+        license = node_to_dict.get("Copyright")
+        title = work_wikitext["title"].replace(" ", "_")
+        url = "http://imslp.org/wiki/" + title
+
+        for i in range(1, num_files+1):
+            this_file = node_to_dict[f"File Name {i}"]
+            this_desc = node_to_dict[f"File Description {i}"]
+            if desc_match:
+                this_desc = desc_match + ", " + this_desc
+
+            this_file = "File:" + this_file
+            permalink = get_permalink_from_filename(title, this_file)
+            file_url = "http://imslp.org/wiki/" + this_file
+            file_title = get_page_title(file_url)
+
+            file_dict = {
+                'title': file_title,
+                'name': this_file,
+                'contributor': 'https://imslp.org',
+                'source': url,
+                'url': permalink,
+                'format_': 'text/html',
+                'language': 'en',
+                'license': license,
+                'description': this_desc,
+            }
+            mediaobjects.append(file_dict)
+
+    return mediaobjects
+
+
+def get_composition_and_filename_from_permalink(permalink):
+    """Given a Special:ReverseLookup url (e.g. https://imslp.org/wiki/Special:ReverseLookup/51109), return
+    a tuple of (wiki page, filename) of the filename that this reverse lookup points to
+    e.g. (Variations_and_Fugue_in_E-flat_major,_Op.35_(Beethoven,_Ludwig_van), File:PMLP05827-Op.35.pdf)
+
+    Unfortunately there doesn't seem to be a way of getting the permalink file id from the IMSLP or Mediawiki APIs,
+    and so we have to do this through html
+
+    """
+    if not permalink.startswith("https://imslp.org/wiki/Special:ReverseLookup/"):
+        raise ValueError("Permalink must be a reverselookup")
+
+    # We don't use read_source because we need the response object to get the URL from
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+    r = session.get(permalink, headers=headers)
+    redirected_url = r.url
+    page_name = redirected_url.replace("https://imslp.org/wiki/", "")
+
+    file_id = permalink.replace("https://imslp.org/wiki/Special:ReverseLookup/", "")
+
+    bs = BeautifulSoup(r.text, features="lxml")
+    file_href = bs.find("div", {"id": "IMSLP" + file_id}).find("a", string="#" + file_id).attrs["title"]
+
+    return page_name, file_href
+
+
+def get_permalink_from_filename(wikipage, filename):
+    """Given a wiki page title and a filename
+    (e.g. Variations_and_Fugue_in_E-flat_major,_Op.35_(Beethoven,_Ludwig_van), File:PMLP05827-Op.35.pdf)
+    find the imslp reverse lookup of the file on that page (e.g. https://imslp.org/wiki/Special:ReverseLookup/51109)
+
+    Unfortunately there doesn't seem to be a way of getting the permalink file id from the IMSLP or Mediawiki APIs,
+    and so we have to do this through html
+    """
+
+    url = "https://imslp.org/wiki/" + wikipage
+
+    # We don't use read_source because we need the response object to get the URL from
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+    r = session.get(url, headers=headers)
+    bs = BeautifulSoup(r.text, features="lxml")
+    text = bs.find("a", {"title": filename}).text
+    text = text.replace("#", "")
+    return "https://imslp.org/wiki/Special:ReverseLookup/" + text
 
 
 def get_score():
@@ -366,6 +522,23 @@ def filter_works_for_xml(work_names):
     return all_xml_works
 
 
+def get_composers_for_works(work_names):
+    """Given a list of works, get a unique list of composers for each of them.
+
+    Requires an individual lookup for each work name
+    """
+    total_works = len(work_names)
+    composers = set()
+
+    for index, work_name in enumerate(work_names, 1):
+        print("{}/{}".format(index, total_works), file=sys.stderr)
+        page_contents = imslp_api_raw_query(work_name)
+        page = page_contents.get('0')
+        if page:
+            composers.add(page['parent'])
+    return sorted(list(composers))
+
+
 def page_has_mxml(work):
     """Take a page from `get_wiki_content_for_pages` and see if the mediawiki
     text contains an XML file"""
@@ -387,18 +560,19 @@ def page_has_mxml(work):
     return False
 
 
-# for each xml, import
-#   - make api call (`extvals` contains metadata from mediawiki markup)
-#   - make http call (to get ismlp file ids of the files) [is this only needed when we do the score import?]
-#   - return data with a combination of api data and mediawiki data
-
-
-# imslp scores:
-#   - mediawiki api to get filenames (bulk?)
-#   - html scrape to get special link and urls
+"""
+categories = imslp.category_pagelist("For unaccompanied chorus")
+xml_works = imslp.filter_works_for_xml(categories)
+composers = imslp.get_composers_for_works(xml_works)
 
 
 """
+
+
+"""
+Main Category: For unaccompanied chorus
+
+
 Wikitext for an imslp page
 {{#fte:imslppage
 

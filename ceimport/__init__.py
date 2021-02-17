@@ -1,6 +1,5 @@
 import logging
 
-from redis_dec import Cache
 from redis import StrictRedis
 
 logger = logging.getLogger(__name__)
@@ -13,7 +12,6 @@ logger.setLevel(logging.DEBUG)
 
 
 redis = StrictRedis(decode_responses=True)
-cache = Cache(redis)
 
 
 def chunks(lst, n):
