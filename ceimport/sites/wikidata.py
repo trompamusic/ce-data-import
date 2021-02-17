@@ -1,21 +1,19 @@
+import requests_cache
 from wikidata.client import Client
 from urllib.parse import urlparse
 
-import requests
 from requests.adapters import HTTPAdapter
 
-from ceimport import cache
-
-s = requests.Session()
-adapter = HTTPAdapter(max_retries=5, pool_connections=100, pool_maxsize=100)
-s.mount("https://", adapter)
+session = requests_cache.CachedSession()
+adapter = HTTPAdapter(max_retries=5)
+session.mount("https://", adapter)
+session.mount("http://", adapter)
 
 
 class WikipediaException(Exception):
     pass
 
 
-@cache.dict()
 def load_person_from_wikidata(wikidata_url):
 
     # TODO: Description, multiple versions for different languages
@@ -38,7 +36,6 @@ def load_person_from_wikidata(wikidata_url):
         return {}
 
 
-@cache.dict()
 def load_person_from_wikipedia(wikidata_url, language):
     """Given a wikidata url, get information from wikipedia
     TODO: Allow a wikipedia URL as argument too
@@ -100,7 +97,7 @@ def get_wikidata_id_from_wikipedia_url(wp_url):
     wp_title = "/".join(parts[2:])
     param_url = "https://en.wikipedia.org/w/api.php?action=query&prop=pageprops&titles={}&format=json"
     full_url = param_url.format(wp_title)
-    r = s.get(full_url)
+    r = session.get(full_url)
     data = r.json()
     title = _get_normalized_query(data, wp_title)
     pages = data.get("query", {}).get("pages")
@@ -124,7 +121,7 @@ def get_description_from_wikipedia(title):
     desc_url = "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&format=json&redirects=1&titles={}"
     full_url = desc_url.format(title)
 
-    r = s.get(full_url)
+    r = session.get(full_url)
     data = r.json()
     return parse_description_from_wikipedia_response(title, data)
 

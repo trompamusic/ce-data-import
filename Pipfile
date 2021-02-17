@@ -19,6 +19,7 @@ redis-decorator = "*"
 ipython = "*"
 mwparserfromhell = "*"
 jedi = "==0.17.2"
+requests-cache = "*"
 
 [requires]
 python_version = "3.7"

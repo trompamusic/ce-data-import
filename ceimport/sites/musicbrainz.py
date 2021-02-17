@@ -1,4 +1,5 @@
 import requests
+import requests_cache
 from musicbrainzngs import musicbrainz as mb
 from requests.adapters import HTTPAdapter
 
@@ -7,10 +8,10 @@ from ceimport import cache
 mb.set_useragent('trompa', '0.1')
 
 
-s = requests.Session()
-adapter = HTTPAdapter(max_retries=5, pool_connections=100, pool_maxsize=100)
-s.mount("https://", adapter)
-s.mount("http://", adapter)
+session = requests_cache.CachedSession()
+adapter = HTTPAdapter(max_retries=5)
+session.mount("https://", adapter)
+session.mount("http://", adapter)
 
 
 VIAF_REL = 'e8571dcc-35d4-4e91-a577-a3382fd84460'
@@ -82,7 +83,7 @@ def load_person_relations_from_musicbrainz(artist_mbid):
         # TODO: Could be more than 1
         isni = isnis[0]
         external_relations['isni'] = isni
-        
+
     rels = artist.get('url-relation-list', [])
     for rel in rels:
         if rel['type-id'] == VIAF_REL:
@@ -185,7 +186,7 @@ def _lookup_imslp_url(url, includes, parse_callback):
     params = {"fmt": "json", "resource": url,
               "inc": includes}
     headers = {"User-Agent": "trompa importer"}
-    r = s.get("https://musicbrainz.org/ws/2/url", params=params, headers=headers)
+    r = session.get("https://musicbrainz.org/ws/2/url", params=params, headers=headers)
     if r.status_code == 200:
         return parse_callback(r.json())
     else:

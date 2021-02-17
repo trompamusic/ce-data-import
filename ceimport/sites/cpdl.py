@@ -1,19 +1,25 @@
 import os
-import re
 from typing import List
 
 import mediawiki
 import requests
+import requests_cache
 import mwparserfromhell as mwph
+from requests.adapters import HTTPAdapter
 
-from ceimport import chunks, cache
+from ceimport import chunks
+
+
+session = requests_cache.CachedSession()
+adapter = HTTPAdapter(max_retries=5)
+session.mount("https://", adapter)
+session.mount("http://", adapter)
 
 
 def get_mediawiki():
     return mediawiki.MediaWiki(url='http://www.cpdl.org/wiki/api.php', rate_limit=True)
 
 
-@cache.dict()
 def get_fileurl_from_media(media: List[str]):
     if len(media) > 50:
         raise ValueError("can only do up to 50 pages")
@@ -26,7 +32,7 @@ def get_fileurl_from_media(media: List[str]):
               "iiprop": "url"}
     url = 'http://www.cpdl.org/wiki/api.php'
 
-    r = requests.get(url, params=params)
+    r = session.get(url, params=params)
     r.raise_for_status()
     try:
         j = r.json()
@@ -55,7 +61,6 @@ def get_fileurl_from_media(media: List[str]):
     return ret
 
 
-@cache.dict()
 def get_wiki_content_for_pages(pages):
     if len(pages) > 50:
         raise ValueError("can only do up to 50 pages")
@@ -72,7 +77,10 @@ def get_wiki_content_for_pages(pages):
     }
     url = 'http://www.cpdl.org/wiki/api.php'
 
-    r = requests.get(url, params=params)
+    try:
+        r = session.get(url, params=params)
+    except requests.exceptions.ConnectionError:
+        return []
     r.raise_for_status()
     try:
         j = r.json()
