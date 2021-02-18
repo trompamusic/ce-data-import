@@ -19,7 +19,7 @@ def load_person_from_isni(isni_url):
             title = title.text
             return {
                 "title": title,
-                "contributor": "https://isni.org/",
+                "contributor": "https://isni.org",
                 "source": isni_url,
                 "format_": "text/html"
             }

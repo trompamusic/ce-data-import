@@ -146,7 +146,7 @@ def composition_wikitext_to_music_composition(wikitext):
     work_dict = {
         'title': title,
         'name': name,
-        'contributor': 'https://cpdl.org/',
+        'contributor': 'https://cpdl.org',
         'source': f'https://cpdl.org/wiki/index.php/{url}',
         'format_': 'text/html',
         'language': 'en',
@@ -234,7 +234,7 @@ def composer_wikitext_to_person(wikitext):
     cpdl = {
         'title': title,
         'name': name,
-        'contributor': 'https://cpdl.org/',
+        'contributor': 'https://cpdl.org',
         'source': f'https://cpdl.org/wiki/index.php/{url}',
         'format_': 'text/html',
         'language': 'en',

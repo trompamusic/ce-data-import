@@ -28,7 +28,7 @@ def load_person_from_wikidata(wikidata_url):
             "title": title,
             "name": label,
             "description": description,
-            "contributor": "https://wikidata.org/",
+            "contributor": "https://wikidata.org",
             "source": wikidata_url,
             "format_": "text/html"
         }
@@ -54,7 +54,7 @@ def load_person_from_wikipedia(wikidata_url, language):
             "title": title,
             "name": label,
             "description": description,
-            "contributor": "https://wikipedia.org/",
+            "contributor": "https://wikipedia.org",
             "source": wikipedia_url,
             "format_": "text/html",
             "language": language

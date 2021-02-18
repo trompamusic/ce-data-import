@@ -21,7 +21,7 @@ def load_person_from_loc(loc_url):
             title = title.text
             return {
                 "title": title,
-                "contributor": "https://id.loc.gov/",
+                "contributor": "https://id.loc.gov",
                 "source": loc_url,
                 "format_": "text/html"
             }

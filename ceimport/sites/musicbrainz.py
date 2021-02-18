@@ -59,7 +59,7 @@ def load_person_from_musicbrainz(artist_mbid):
         # This is the title of the page, so it includes the header
         'title': f'{name} - MusicBrainz',
         'name': name,
-        'contributor': 'https://musicbrainz.org/',
+        'contributor': 'https://musicbrainz.org',
         'source': f'https://musicbrainz.org/artist/{artist_mbid}',
         'format_': 'text/html',
         'language': 'en',
@@ -109,7 +109,7 @@ def load_work_from_musicbrainz(work_mbid):
         # This is the title of the page, so it includes the header
         'title': f'{title} - MusicBrainz',
         'name': title,
-        'contributor': 'https://musicbrainz.org/',
+        'contributor': 'https://musicbrainz.org',
         'source': f'https://musicbrainz.org/work/{work_mbid}',
         'format_': 'text/html',
         'language': 'en'
@@ -140,7 +140,7 @@ def load_work_from_musicbrainz(work_mbid):
                 # This is the title of the page, so it includes the header
                 'title': f'{part_title} - MusicBrainz',
                 'name': part_title,
-                'contributor': 'https://musicbrainz.org/',
+                'contributor': 'https://musicbrainz.org',
                 'source': f'https://musicbrainz.org/work/{part_mbid}',
                 'format_': 'text/html',
                 'language': 'en',
@@ -162,7 +162,7 @@ def load_area_from_musicbrainz(area_id):
         # This is the title of the page, so it includes the header
         'title': f'{name} - MusicBrainz',
         'name': name,
-        'contributor': 'https://musicbrainz.org/',
+        'contributor': 'https://musicbrainz.org',
         'source': f'https://musicbrainz.org/area/{area_id}',
         'format_': 'text/html',
         'language': 'en'

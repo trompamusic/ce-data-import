@@ -259,7 +259,7 @@ def api_composer(composer_name):
         title = get_page_title(composer_source)
 
         return {
-            'contributor': 'https://imslp.org/',
+            'contributor': 'https://imslp.org',
             'source': composer_source,
             'format_': 'text/html',
             'language': 'en',

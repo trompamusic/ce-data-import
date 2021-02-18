@@ -19,7 +19,7 @@ def load_person_from_worldcat(worldcat_url):
             title = title.text
             return {
                 "title": title,
-                "contributor": "https://www.worldcat.org/",
+                "contributor": "https://www.worldcat.org",
                 "source": worldcat_url,
                 "format_": "text/html"
             }
