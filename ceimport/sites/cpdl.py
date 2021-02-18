@@ -52,11 +52,11 @@ def get_fileurl_from_media(media: List[str]):
         if info:
             image_info[v['title']] = info[0]
 
-    ret = []
+    ret = {}
     for m in media:
-        m = norm_mapping.get(m, m)
-        if m in image_info:
-            ret.append(image_info[m])
+        norm = norm_mapping.get(m, m)
+        if norm in image_info:
+            ret[m] = image_info[norm]
 
     return ret
 
@@ -157,24 +157,61 @@ def composition_wikitext_to_music_composition(wikitext):
             "composer": composer}
 
 
-def get_xml_files_from_composition_wikitext(wikitext):
+def get_file_pairs_from_composition_wikitext(wikitext):
+    """
+    CPDL Wikitext has lines like this:
+    *{{PostedDate|2014-11-24}} {{CPDLno|33477}} [[Media:Torrejon-A_este_sol_peregrino.pdf|{{pdf}}]] [[Media:Torrejon-A_este_sol_peregrino.mid|{{mid}}]] [[Media:Torrejon-A_este_sol_peregrino.mxl|{{XML}}]] [[Media:Torrejon-A_este_sol_peregrino.musx|{{F14}}]] (Finale 2014)
+    Look for these, and return ones that include an {{XML}} link. If there is also a PDF, return that too
+    """
     parsed = mwph.parse(wikitext['content'])
-    wikilinks = parsed.filter_wikilinks()
-    wikilinks = [w for w in wikilinks if w.text == "{{XML}}"]
 
-    return [str(w.title) for w in wikilinks]
+    # Look for nodes which are {{CPDLno}} templates
+    cpdl_nodes = [template for template in parsed.filter_templates() if template.name == 'CPDLno']
+    cpdl_nodes.append(parsed.nodes[-1])
+
+    ret = []
+
+    # For each of these nodes, from the node to the next, see if there is
+    # a wikilink with {{XML}}. If so, return both the pdf in this range if it exists
+    # and the xml file
+    # e.g. nodes 3, 12, 15. We append the last node so that we can group them
+    # into 3-12, 12-15, 15-end
+    parsed_nodes = parsed.nodes
+    for i in range(len(cpdl_nodes)-1):
+        start = cpdl_nodes[i]
+        end = cpdl_nodes[i+1]
+        start_i = parsed_nodes.index(start)
+        end_i = parsed_nodes.index(end)
+        relevant_nodes = parsed_nodes[start_i:end_i]
+        wikilinks = [n for n in relevant_nodes if isinstance(n, mwph.nodes.Wikilink)]
+        xml_templates = [str(n.title) for n in wikilinks if n.text == "{{XML}}"]
+        pdf_templates = [str(n.title) for n in wikilinks if n.text == "{{pdf}}"]
+
+        if len(xml_templates) == 1 and len(pdf_templates) in [0, 1]:
+            xml = xml_templates[0]
+            pdf = pdf_templates[0] if len(pdf_templates) else None
+            ret.append({"xml": xml.replace("Media:", "File:"),
+                        "pdf": pdf.replace("Media:", "File:")})
+
+    return ret
 
 
 def composition_wikitext_to_mediaobjects(wikitext):
-    xml_files = get_xml_files_from_composition_wikitext(wikitext)
-    xml_files = [x.replace("Media:", "File:") for x in xml_files]
+    files = get_file_pairs_from_composition_wikitext(wikitext)
+    file_names = []
+    for f in files:
+        file_names.append(f["xml"])
+        if f["pdf"]:
+            file_names.append(f["pdf"])
 
-    file_urls = get_fileurl_from_media(xml_files)
+    file_urls = get_fileurl_from_media(file_names)
     ret = []
 
-    for f in file_urls:
-        url = f['url']
-        descriptionurl = f['descriptionurl']
+    for f in files:
+        xml = f["xml"]
+        xml_url = file_urls[xml]
+        url = xml_url['url']
+        descriptionurl = xml_url['descriptionurl']
         if url.endswith(".xml"):
             format = 'application/vnd.recordare.musicxml+xml'
         elif url.endswith(".mxl"):
@@ -185,16 +222,38 @@ def composition_wikitext_to_mediaobjects(wikitext):
         filename = os.path.basename(descriptionurl)
         title = f"{filename} - ChoralWiki"
 
-        mediaobject = {
+        xmlmediaobject = {
             'title': title,  # <title> of html
             'name': filename,  # name of file
-            'contributor': 'https://cpdl.org/',
+            'contributor': 'https://cpdl.org',
             'source': descriptionurl,  # url of a webpage about the file
             'contenturl': url,  # url to the actual file
             'encodingformat': format,  # mimetype of the actual file
             'format_': 'text/html'  # mimetype of the webpage (source)
         }
-        ret.append(mediaobject)
+
+        pdfmediaobject = None
+        if f["pdf"]:
+            pdf = f["pdf"]
+            pdf_url = file_urls[pdf]
+            url = pdf_url['url']
+            descriptionurl = pdf_url['descriptionurl']
+            format = 'application/pdf'
+            # TODO: Should this filename have the 'File:' prefix?
+            filename = os.path.basename(descriptionurl)
+            title = f"{filename} - ChoralWiki"
+
+            pdfmediaobject = {
+                'title': title,  # <title> of html
+                'name': filename,  # name of file
+                'contributor': 'https://cpdl.org',
+                'source': descriptionurl,  # url of a webpage about the file
+                'contenturl': url,  # url to the actual file
+                'encodingformat': format,  # mimetype of the actual file
+                'format_': 'text/html'  # mimetype of the webpage (source)
+            }
+
+        ret.append({"xml": xmlmediaobject, "pdf": pdfmediaobject})
     return ret
 
 

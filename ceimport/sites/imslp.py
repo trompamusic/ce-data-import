@@ -327,6 +327,74 @@ def api_work(work_name):
             "composer": composer}
 
 
+def get_mediaobject_for_filename(work_wikitext, filename):
+    """
+    If we have a specific file that we want to import (looked up from a Special:ReverseLookup)
+    then find that file in the provided wikitext and return information to create a MediaObject
+    TODO: This shares a lot of common code with `files_for_work`
+    """
+    # Filename doesn't include File: prefix in the template
+    if filename.startswith("File:"):
+        filename = filename.replace("File:", "")
+
+    parsed = mwph.parse(work_wikitext["content"])
+    # A page should have one node, the #fte:imslppage template
+    nodes = parsed.nodes
+    assert len(nodes) == 1
+    node = nodes[0]
+
+    # One of the parameters in this template is ' *****FILES***** '
+    files_param = None
+    for param in node.params:
+        if param.name == ' *****FILES***** ':
+            files_param = param
+            break
+
+    if files_param:
+        files = files_param.value
+        file_node = None
+        for node in files.nodes:
+            is_file_node = False
+            if hasattr(node, 'name') and node.name.strip() == "#fte:imslpfile":
+                for fileparam in node.params:
+                    if "File Name" in fileparam.name and fileparam.value == filename:
+                        is_file_node = True
+                    break
+            if is_file_node:
+                break
+        if file_node:
+            node_to_dict = {str(n.name): str(n.value).strip() for n in file_node.params}
+            chosen_file = [n for n, v in node_to_dict.items() if v == filename]
+            file_index = chosen_file[0].replace("File Name ", "")
+
+            license = node_to_dict.get("Copyright")
+            title = work_wikitext["title"].replace(" ", "_")
+            url = "http://imslp.org/wiki/" + title
+
+            this_file = node_to_dict[f"File Name {file_index}"]
+            this_desc = node_to_dict[f"File Description {file_index}"]
+
+            this_file = "File:" + this_file
+            permalink = get_permalink_from_filename(title, this_file)
+            file_url = "http://imslp.org/wiki/" + this_file
+            file_title = get_page_title(file_url)
+
+            # TODO: Person who published, transcribed work. Date of publication on imslp?
+            file_dict = {
+                'title': file_title,
+                'name': this_file,
+                'contributor': 'https://imslp.org',
+                'source': url,
+                'url': permalink,
+                'format_': 'text/html',
+                'language': 'en',
+                'license': license,
+                'description': this_desc,
+            }
+            return file_dict
+    return {}
+
+
 def files_for_work(work_wikitext):
     """Get MediaObject information for files relevant to the work
 
@@ -373,27 +441,6 @@ def files_for_work(work_wikitext):
     else:
         xml_node = last_node = None
 
-
-
-    """
-    {{#fte:imslpfile\n|File Name 1=PMLP180570-WeeLamAllparts.pdf\n|File Name 2=PMLP180570-WeeLam.zip\n|
-    File Description 1=Complete score and parts\n|File Description 2=Engraving files (Finale & XML)\n|
-    Page Count 1=\n|Page Count 2=\n|Arranger={{LinkArr|Michel|Rondeau}}\n|Image Type=Typeset\n|S
-    canner=Michel Rondeau\n|Uploader=[[User:Michrond|Michrond]]\n|Date Submitted=2013/1/15\n|
-    Publisher Information=Michel Rondeau\n|Copyright=Creative Commons Attribution Non-commercial Share Alike 3.0\n|
-    Misc. Notes={{WIMAProject}}\n}}
-    
-    For each of the files:
-      - get filename
-      - optional: Person who published, date
-      - source: File: + filename
-      - title: get html of page and get <title>
-      - url: work_wikitext['title'] + filename -> special recerselookup
-      - name: filename
-    
-    
-    """
-
     mediaobjects = []
     if xml_node:
         node_to_dict = {str(n.name): str(n.value).strip() for n in xml_node.params}
@@ -418,6 +465,7 @@ def files_for_work(work_wikitext):
             file_url = "http://imslp.org/wiki/" + this_file
             file_title = get_page_title(file_url)
 
+            # TODO: Person who published, transcribed work. Date of publication on imslp?
             file_dict = {
                 'title': file_title,
                 'name': this_file,

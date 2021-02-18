@@ -64,66 +64,6 @@ def load_artist_from_musicbrainz(artist_mbid):
     return ret
 
 
-def load_artist_from_imslp(url):
-    logger.info("Importing imslp artist %s", url)
-    if "Category:" not in url:
-        raise Exception("Url should be an imslp Category: url")
-
-    if url.startswith("https://imslp.org"):
-        url = "/".join(url.split("/")[4:])
-
-    people = []
-
-    imslp_person = imslp.api_composer(url)
-    if imslp_person:
-        people.append(imslp_person)
-
-    rels = imslp.api_composer_get_relations(url)
-    if 'worldcat' in rels:
-        worldcat_person = worldcat.load_person_from_worldcat(rels['worldcat'])
-        people.append(worldcat_person)
-    if 'viaf' in rels:
-        viaf_person = viaf.load_person_from_viaf(rels['viaf'])
-        people.append(viaf_person)
-    if 'wikipedia' in rels:
-        wikidata_id = wikidata.get_wikidata_id_from_wikipedia_url(rels['wikipedia'])
-        if wikidata_id:
-            wd_person = wikidata.load_person_from_wikidata(rels['wikidata'])
-            if wd_person:
-                people.append(wd_person)
-            wp_person = wikidata.load_person_from_wikipedia(rels['wikidata'], 'en')
-            if wp_person:
-                people.append(wp_person)
-    if 'musicbrainz' in rels:
-        mb_person = musicbrainz.load_person_from_musicbrainz(rels['musicbrainz'])
-        people.append(mb_person)
-    if 'isni' in rels:
-        isni_person = isni.load_person_from_isni(rels['isni'])
-        people.append(isni_person)
-    if 'loc' in rels:
-        loc_person = loc.load_person_from_loc(rels['loc'])
-        people.append(loc_person)
-
-    # If no link to musicbrainz from imslp, do a reverse lookup in musicbrainz to see if it's there
-    if 'musicbrainz' not in rels:
-        artist_mbid = musicbrainz.get_artist_mbid_by_imslp_url(url)
-        # TODO: If the artist exists in MB, then we should also import all of the other
-        #  relationships that exist, by using `load_artist_from_musicbrainz`
-        if artist_mbid:
-            mb_person = musicbrainz.load_person_from_musicbrainz(artist_mbid)
-            people.append(mb_person)
-
-    # dedup by source
-    ret = []
-    seen = set()
-    for p in people:
-        if 'source' in p:
-            if p['source'] not in seen:
-                ret.append(p)
-                seen.add(p['source'])
-    return ret
-
-
 def get_existing_person_by_source(source) -> str:
     """Returns an identifier of the thing with the given source, else None"""
     query_by_source = query_person.query_person(source=source)
@@ -238,6 +178,11 @@ def link_musiccomposition_and_mediaobject(composition_id, mediaobject_id):
     connection.submit_request(query)
 
 
+def link_mediaobject_was_derived_from(source_id, derived_id):
+    query = mutation_mediaobject.mutation_merge_media_object_wasderivedfrom(derived_id, source_id)
+    connection.submit_request(query)
+
+
 def create_persons_and_link(persons):
     # TODO: This returns all person ids that we created, but there could be other
     #  ids in the database of this person, we should link those and return them too
@@ -314,26 +259,167 @@ def load_musiccomposition_from_musicbrainz(work_mbid):
         link_musiccomposition_and_composers(part_id, composer_ids)
 
 
-def load_musiccomposition_from_imslp_url(imslp_url, need_xml):
+def load_artist_from_imslp(url):
+    logger.info("Importing imslp artist %s", url)
+    if "Category:" not in url:
+        raise Exception("Url should be an imslp Category: url")
+
+    if url.startswith("https://imslp.org"):
+        url = "/".join(url.split("/")[4:])
+
+    people = []
+
+    imslp_person = imslp.api_composer(url)
+    if imslp_person:
+        people.append(imslp_person)
+
+    rels = imslp.api_composer_get_relations(url)
+    if 'worldcat' in rels:
+        worldcat_person = worldcat.load_person_from_worldcat(rels['worldcat'])
+        people.append(worldcat_person)
+    if 'viaf' in rels:
+        viaf_person = viaf.load_person_from_viaf(rels['viaf'])
+        people.append(viaf_person)
+    if 'wikipedia' in rels:
+        wikidata_id = wikidata.get_wikidata_id_from_wikipedia_url(rels['wikipedia'])
+        if wikidata_id:
+            wd_person = wikidata.load_person_from_wikidata(rels['wikidata'])
+            if wd_person:
+                people.append(wd_person)
+            wp_person = wikidata.load_person_from_wikipedia(rels['wikidata'], 'en')
+            if wp_person:
+                people.append(wp_person)
+    if 'musicbrainz' in rels:
+        mb_person = musicbrainz.load_person_from_musicbrainz(rels['musicbrainz'])
+        people.append(mb_person)
+    if 'isni' in rels:
+        isni_person = isni.load_person_from_isni(rels['isni'])
+        people.append(isni_person)
+    if 'loc' in rels:
+        loc_person = loc.load_person_from_loc(rels['loc'])
+        people.append(loc_person)
+
+    # If no link to musicbrainz from imslp, do a reverse lookup in musicbrainz to see if it's there
+    if 'musicbrainz' not in rels:
+        artist_mbid = musicbrainz.get_artist_mbid_by_imslp_url(url)
+        # TODO: If the artist exists in MB, then we should also import all of the other
+        #  relationships that exist, by using `load_artist_from_musicbrainz`
+        if artist_mbid:
+            mb_person = musicbrainz.load_person_from_musicbrainz(artist_mbid)
+            people.append(mb_person)
+
+    # dedup by source
+    ret = []
+    seen = set()
+    for p in people:
+        if 'source' in p:
+            if p['source'] not in seen:
+                ret.append(p)
+                seen.add(p['source'])
+    return ret
+
+
+def load_musiccomposition_from_imslp_by_file(reverselookup):
+    """Using an IMSLP Special:ReverseLookup url, find the composition and import
+       - composer
+       - work
+       - file
+    """
+    if not reverselookup.startswith("https://imslp.org/wiki/Special:ReverseLookup/"):
+        raise ValueError("Should be a Special:ReverseLookup url")
+
+    composition, filename = imslp.get_composition_and_filename_from_permalink(reverselookup)
+    load_musiccomposition_from_imslp_name(composition)
+
+
+def load_musiccomposition_from_imslp_name(imslp_name):
     """Load a MusicComposition from a single page on IMSLP,
-    and also load any musicxml files as MediaObjects
-    TODO: Should be able to specify what to download, e.g. a specific PDF, or all files, or only music xmls
-    TODO: Should be able to specify a Special:ReverseLookup url which gives the composition and file
+    and also load any musicxml files as MediaObjects and any related PDFs
     """
 
-    logger.info("Importing imslp work %s", imslp_url)
-    composition, composer_url, xml_objects = imslp.get_composition_page(imslp_url)
+    logger.info("Importing imslp work %s", imslp_name)
+    work = imslp.api_work(imslp_name)
+    musiccomposition = work["composition"]
+    composer = work["composer"]
 
-    if not need_xml or xml_objects:
-        composition_id = get_or_create_musiccomposition(composition)
-        composer_ids = load_artist_from_imslp(composer_url)
+    if composer:
+        composition_id = get_or_create_musiccomposition(musiccomposition)
+
+
+        composer_ids = load_artist_from_imslp(composer)
         link_musiccomposition_and_composers(composition_id, composer_ids)
 
-        for xml in xml_objects:
-            mediaobject_id = get_or_create_mediaobject(xml)
-            link_musiccomposition_and_mediaobject(composition_id, mediaobject_id)
+        wikitext = imslp.get_wiki_content_for_pages([imslp_name])
+        files = imslp.files_for_work(wikitext[0])
+        # We expect to see just one xml file, and maybe one pdf
+        # TODO, there could be more than one, we need to support this too
+        if len(files) == 1:
+            file = files[0]
+            if "XML" not in file["description"]:
+                logger.info(" - Only got one file but it's not an xml, not sure what to do")
+            else:
+                xmlmediaobject_ceid = get_or_create_mediaobject(file)
+                link_musiccomposition_and_mediaobject(composition_id=composition_id,
+                                                      mediaobject_id=xmlmediaobject_ceid)
+        elif len(files) == 2:
+            xmlfile = [f for f in files if "XML" in f["description"]]
+            pdffile = [f for f in files if "pdf" in f["description"]]
+            if not xmlfile or not pdffile:
+                logger.info(" - expected one xml and one pdf, but this isn't the case")
+            else:
+                xmlfile = xmlfile[0]
+                pdffile = pdffile[0]
+                xmlmediaobject_ceid = get_or_create_mediaobject(xmlfile)
+                link_musiccomposition_and_mediaobject(composition_id=composition_id,
+                                                      mediaobject_id=xmlmediaobject_ceid)
+
+                pdfmediaobject_ceid = get_or_create_mediaobject(pdffile)
+                link_musiccomposition_and_mediaobject(composition_id=composition_id,
+                                                      mediaobject_id=pdfmediaobject_ceid)
+
+                # In IMSLP, machine-readable scores are transcribed from the PDF,
+                # so the score is derived from the pdf
+                # TODO: We should check if this is the case all the time
+                link_mediaobject_was_derived_from(source_id=pdfmediaobject_ceid,
+                                                  derived_id=xmlmediaobject_ceid)
+        else:
+            logger.info(" - Got more than two files, don't know what to do with them")
     else:
-        logger.info(" - No xml files, skipping")
+        logger.info(" - No composer??, skipping")
+
+
+def import_cpdl_composer_wikitext(composer_wikitext):
+    person = cpdl.composer_wikitext_to_person(composer_wikitext)
+    person_cpdl = person['cpdl']
+    persons = [person_cpdl]
+
+    if person['imslp']:
+        person_imslp = load_artist_from_imslp(person['imslp'])
+        persons.extend(person_imslp)
+    if person['wikipedia']:
+        wikidata_id = wikidata.get_wikidata_id_from_wikipedia_url(person['wikipedia'])
+        if wikidata_id:
+            wd_person = wikidata.load_person_from_wikidata(wikidata_id)
+            if wd_person:
+                persons.append(wd_person)
+            wp_person = wikidata.load_person_from_wikipedia(wikidata_id, 'en')
+            if wp_person:
+                persons.append(wp_person)
+    create_persons_and_link(persons)
+
+
+def import_cpdl_composer(composer_name):
+    """Import a single composer"""
+    composerwikitext = cpdl.get_wikitext_for_titles([composer_name])
+    if composerwikitext:
+        composer = composerwikitext[0]
+        logger.info("Importing CPDL composer %s", composer['title'])
+        import_cpdl_composer_wikitext(composer)
+        source = f'https://cpdl.org/wiki/index.php/{composer["title"].replace(" ", "_")}'
+        existing_composer_ceid = get_existing_person_by_source(source)
+        return existing_composer_ceid
+    else:
+        return None
 
 
 def import_cpdl_composers_for_category(cpdl_category):
@@ -350,23 +436,44 @@ def import_cpdl_composers_for_category(cpdl_category):
     total = len(composerwikitext)
     for i, composer in enumerate(composerwikitext, 1):
         logger.info("Importing CPDL composer %s/%s %s", i, total, composer['title'])
-        person = cpdl.composer_wikitext_to_person(composer)
-        person_cpdl = person['cpdl']
-        persons = [person_cpdl]
+        import_cpdl_composer_wikitext(composer)
 
-        if person['imslp']:
-            person_imslp = load_artist_from_imslp(person['imslp'])
-            persons.extend(person_imslp)
-        if person['wikipedia']:
-            wikidata_id = wikidata.get_wikidata_id_from_wikipedia_url(person['wikipedia'])
-            if wikidata_id:
-                wd_person = wikidata.load_person_from_wikidata(wikidata_id)
-                if wd_person:
-                    persons.append(wd_person)
-                wp_person = wikidata.load_person_from_wikipedia(wikidata_id, 'en')
-                if wp_person:
-                    persons.append(wp_person)
-        create_persons_and_link(persons)
+
+def import_cpdl_work_wikitext(work_wikitext):
+    composition = cpdl.composition_wikitext_to_music_composition(work_wikitext)
+    composer = composition['composer']
+    if composer is not None:
+        source = f'https://cpdl.org/wiki/index.php/{composer.replace(" ", "_")}'
+        existing_composer_ceid = get_existing_person_by_source(source)
+        if not existing_composer_ceid:
+            existing_composer_ceid = import_cpdl_composer(composer)
+        if existing_composer_ceid:
+            musiccomp_ceid = get_or_create_musiccomposition(composition['work'])
+            link_musiccomposition_and_composers(musiccomp_ceid, [existing_composer_ceid])
+            mediaobjects = cpdl.composition_wikitext_to_mediaobjects(work_wikitext)
+            for mo in mediaobjects:
+                xml = mo["xml"]
+                xmlmediaobject_ceid = get_or_create_mediaobject(xml)
+                link_musiccomposition_and_mediaobject(composition_id=musiccomp_ceid,
+                                                      mediaobject_id=xmlmediaobject_ceid)
+                pdf = mo["pdf"]
+                if pdf:
+                    pdfmediaobject_ceid = get_or_create_mediaobject(pdf)
+                    link_musiccomposition_and_mediaobject(composition_id=musiccomp_ceid,
+                                                          mediaobject_id=pdfmediaobject_ceid)
+                    # In CPDL, we know that PDFs are generated from the source xml file
+                    # TODO: Are there any situations where this isn't the case?
+                    link_mediaobject_was_derived_from(source_id=xmlmediaobject_ceid, derived_id=pdfmediaobject_ceid)
+        else:
+            logger.info(" - missing composer?")
+
+
+def import_cpdl_work(work_name):
+    """Import a single work"""
+    wikitext = cpdl.get_wikitext_for_titles([work_name])
+    for work in wikitext:
+        logger.info("Importing CPDL work %s", work['title'])
+        import_cpdl_work_wikitext(work)
 
 
 def import_cpdl_works_for_category(cpdl_category):
@@ -383,18 +490,4 @@ def import_cpdl_works_for_category(cpdl_category):
     total = len(xmlwikitext)
     for i, work in enumerate(xmlwikitext, 1):
         logger.info("Importing CPDL work %s/%s %s", i, total, work['title'])
-        composition = cpdl.composition_wikitext_to_music_composition(work)
-        composer = composition['composer']
-        if composer is not None:
-            source = f'https://cpdl.org/wiki/index.php/{composer.replace(" ", "_")}'
-            existing_composer_ceid = get_existing_person_by_source(source)
-            if existing_composer_ceid:
-                musiccomp_ceid = get_or_create_musiccomposition(composition['work'])
-                link_musiccomposition_and_composers(musiccomp_ceid, [existing_composer_ceid])
-                mediaobjects = cpdl.composition_wikitext_to_mediaobjects(work)
-                for mo in mediaobjects:
-                    mediaobject_ceid = get_or_create_mediaobject(mo)
-                    link_musiccomposition_and_mediaobject(composition_id=musiccomp_ceid,
-                                                          mediaobject_id=mediaobject_ceid)
-            else:
-                logger.info(" - missing composer?")
+        import_cpdl_work_wikitext(work)

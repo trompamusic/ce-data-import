@@ -1,6 +1,5 @@
 import click
 
-import ceimport
 from ceimport import loader
 from ceimport.sites import imslp
 
@@ -54,10 +53,10 @@ def import_work_musicbrainz(mbid):
 @cli.command()
 @click.option('--file')
 @click.option('--url')
-@click.option('--need-xml/--no-need-xml', is_flag=True, default=True, help="If set, require that there is an xml file for download")
-def import_work_imslp(file, url, need_xml):
+def import_work_imslp(file, url):
+    """Import either a work title (--url) or all titles in a file (--file)"""
     if url:
-        loader.load_musiccomposition_from_imslp_url(url, need_xml)
+        loader.load_musiccomposition_from_imslp_name(url)
     elif file:
         with open(file, 'r') as fp:
             works = fp.read().splitlines()
@@ -80,11 +79,6 @@ def imslp_filter_xml(pages):
     works = pages.read().splitlines()
     for xml_work in imslp.filter_works_for_xml(works):
         print(xml_work)
-
-
-@cli.command()
-def clear_cache():
-    ceimport.cache.delete_cache()
 
 
 if __name__ == '__main__':
