@@ -84,7 +84,6 @@ def parse_description_from_wikipedia_response(title, data):
     return ""
 
 
-@cache.dict()
 def get_wikidata_id_from_wikipedia_url(wp_url):
     """Get the wikidata id for this URL if it exists
     Returns None if the page has no wikidata id"""

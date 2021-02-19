@@ -14,7 +14,7 @@ from mediawiki import mediawiki
 import mwparserfromhell as mwph
 from requests.adapters import HTTPAdapter
 
-from ceimport import chunks
+from ceimport import chunks, logger
 
 
 def make_throttle_hook():
@@ -159,7 +159,6 @@ def api_all_pages():
     alldata = []
     while hasnext:
         url = base_url.format(start)
-        print(url)
         r = session.get(url)
         j = r.json()
         metadata = j.get('metadata', {})
@@ -287,7 +286,7 @@ def api_work(work_name):
 
     url = "https://imslp.org/wiki/" + work_name.replace(" ", "_")
     html_page = read_source(url)
-    api_page = imslp_api_raw_query(work_name)
+    api_page = imslp_api_raw_query(work_name.replace("_", " "))
     api_page = api_page.get('0', {})
 
     language_mapping = {'english': 'en',
@@ -340,7 +339,9 @@ def get_mediaobject_for_filename(work_wikitext, filename):
     parsed = mwph.parse(work_wikitext["content"])
     # A page should have one node, the #fte:imslppage template
     nodes = parsed.nodes
-    assert len(nodes) == 1
+    if not nodes or str(nodes[0].name).strip() != "#fte:imslppage":
+        logger.info("Cannot find #fte:imslppage node, skipping")
+        return {}
     node = nodes[0]
 
     # One of the parameters in this template is ' *****FILES***** '
@@ -357,7 +358,8 @@ def get_mediaobject_for_filename(work_wikitext, filename):
             is_file_node = False
             if hasattr(node, 'name') and node.name.strip() == "#fte:imslpfile":
                 for fileparam in node.params:
-                    if "File Name" in fileparam.name and fileparam.value == filename:
+                    if "File Name" in fileparam.name and str(fileparam.value).strip() == filename.strip():
+                        file_node = node
                         is_file_node = True
                     break
             if is_file_node:
@@ -375,7 +377,7 @@ def get_mediaobject_for_filename(work_wikitext, filename):
             this_desc = node_to_dict[f"File Description {file_index}"]
 
             this_file = "File:" + this_file
-            permalink = get_permalink_from_filename(title, this_file)
+            permalink = get_permalink_from_filename(title, this_file.replace("_", " "))
             file_url = "http://imslp.org/wiki/" + this_file
             file_title = get_page_title(file_url)
 
@@ -407,7 +409,9 @@ def files_for_work(work_wikitext):
 
     # A page should have one node, the #fte:imslppage template
     nodes = parsed.nodes
-    assert len(nodes) == 1
+    if not nodes or str(nodes[0].name).strip() != "#fte:imslppage":
+        logger.info("Cannot find #fte:imslppage node, skipping")
+        return {}
     node = nodes[0]
 
     # One of the parameters in this template is ' *****FILES***** '
@@ -461,7 +465,8 @@ def files_for_work(work_wikitext):
                 this_desc = desc_match + ", " + this_desc
 
             this_file = "File:" + this_file
-            permalink = get_permalink_from_filename(title, this_file)
+            # TODO: This isn't a great way of going back and forth between filenames
+            permalink = get_permalink_from_filename(title, this_file.replace("_", " "))
             file_url = "http://imslp.org/wiki/" + this_file
             file_title = get_page_title(file_url)
 

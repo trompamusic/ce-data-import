@@ -1,7 +1,5 @@
 import logging
 
-from redis import StrictRedis
-
 logger = logging.getLogger(__name__)
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
@@ -9,9 +7,6 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 logger.setLevel(logging.DEBUG)
-
-
-redis = StrictRedis(decode_responses=True)
 
 
 def chunks(lst, n):

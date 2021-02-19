@@ -329,61 +329,102 @@ def load_musiccomposition_from_imslp_by_file(reverselookup):
         raise ValueError("Should be a Special:ReverseLookup url")
 
     composition, filename = imslp.get_composition_and_filename_from_permalink(reverselookup)
-    load_musiccomposition_from_imslp_name(composition)
+    # The composition url will end with a #anchor, remove it
+    if "#" in composition:
+        composition = composition[:composition.index("#")]
+    load_musiccomposition_from_imslp_name(composition, load_files=False)
+
+    # Once we loaded the composition, we look it up again to get the id
+    url = "https://imslp.org/wiki/" + composition.replace(" ", "_")
+    composition_id = get_existing_musiccomposition_by_source(url)
+    print("got id", composition_id)
+
+    wikitext = imslp.get_wiki_content_for_pages([composition])
+    if composition_id:
+        if wikitext:
+            file = imslp.get_mediaobject_for_filename(wikitext[0], filename.replace(" ", "_"))
+            if file:
+                mediaobject_ceid = get_or_create_imslp_mediaobject(file)
+                link_musiccomposition_and_mediaobject(composition_id=composition_id,
+                                                      mediaobject_id=mediaobject_ceid)
+    else:
+        logger.info(" - cannot find composition after importing it once")
 
 
-def load_musiccomposition_from_imslp_name(imslp_name):
+def get_or_create_imslp_mediaobject(mediaobject):
+    """Look for an existing mediaobject based on the url field (permalink)
+    otherwise create one"""
+    source = mediaobject['url']
+    existing = get_existing_mediaobject_by_source(source)
+    if existing:
+        return existing
+
+    return create_mediaobject(mediaobject)
+
+
+def load_musiccomposition_from_imslp_name(imslp_name, load_files=True):
     """Load a MusicComposition from a single page on IMSLP,
     and also load any musicxml files as MediaObjects and any related PDFs
     """
 
     logger.info("Importing imslp work %s", imslp_name)
     work = imslp.api_work(imslp_name)
-    musiccomposition = work["composition"]
+    musiccomposition = work["work"]
     composer = work["composer"]
 
     if composer:
         composition_id = get_or_create_musiccomposition(musiccomposition)
 
+        composer_source = f'https://imslp.org/wiki/{composer.replace(" ", "_")}'
 
-        composer_ids = load_artist_from_imslp(composer)
-        link_musiccomposition_and_composers(composition_id, composer_ids)
+        existing_composer_ceid = get_existing_person_by_source(composer_source)
+        if not existing_composer_ceid:
+            persons = load_artist_from_imslp(composer)
+            create_persons_and_link(persons)
+            existing_composer_ceid = get_existing_person_by_source(composer_source)
+
+        link_musiccomposition_and_composers(composition_id, [existing_composer_ceid])
+
+        if not load_files:
+            return
 
         wikitext = imslp.get_wiki_content_for_pages([imslp_name])
         files = imslp.files_for_work(wikitext[0])
         # We expect to see just one xml file, and maybe one pdf
         # TODO, there could be more than one, we need to support this too
+        if len(files) == 0:
+            logger.info(" - expected at least one file but got none")
         if len(files) == 1:
             file = files[0]
             if "XML" not in file["description"]:
                 logger.info(" - Only got one file but it's not an xml, not sure what to do")
             else:
-                xmlmediaobject_ceid = get_or_create_mediaobject(file)
+                xmlmediaobject_ceid = get_or_create_imslp_mediaobject(file)
                 link_musiccomposition_and_mediaobject(composition_id=composition_id,
                                                       mediaobject_id=xmlmediaobject_ceid)
-        elif len(files) == 2:
+        else:
             xmlfile = [f for f in files if "XML" in f["description"]]
-            pdffile = [f for f in files if "pdf" in f["description"]]
-            if not xmlfile or not pdffile:
-                logger.info(" - expected one xml and one pdf, but this isn't the case")
+            pdffiles = [f for f in files if f["name"].endswith("pdf")]
+            if not xmlfile or not pdffiles:
+                logger.info(" - expected one xml and some pdfs, but this isn't the case")
+                print(files)
             else:
                 xmlfile = xmlfile[0]
-                pdffile = pdffile[0]
-                xmlmediaobject_ceid = get_or_create_mediaobject(xmlfile)
+                xmlmediaobject_ceid = get_or_create_imslp_mediaobject(xmlfile)
                 link_musiccomposition_and_mediaobject(composition_id=composition_id,
                                                       mediaobject_id=xmlmediaobject_ceid)
 
-                pdfmediaobject_ceid = get_or_create_mediaobject(pdffile)
-                link_musiccomposition_and_mediaobject(composition_id=composition_id,
-                                                      mediaobject_id=pdfmediaobject_ceid)
+                logger.info(" - got %s pdf files, importing each of them", len(pdffiles))
+                for pdffile in pdffiles:
+                    pdfmediaobject_ceid = get_or_create_imslp_mediaobject(pdffile)
+                    link_musiccomposition_and_mediaobject(composition_id=composition_id,
+                                                          mediaobject_id=pdfmediaobject_ceid)
 
-                # In IMSLP, machine-readable scores are transcribed from the PDF,
-                # so the score is derived from the pdf
-                # TODO: We should check if this is the case all the time
-                link_mediaobject_was_derived_from(source_id=pdfmediaobject_ceid,
-                                                  derived_id=xmlmediaobject_ceid)
-        else:
-            logger.info(" - Got more than two files, don't know what to do with them")
+                    # In IMSLP, a PDF that comes linked with an XML file is a rendering of that file ,
+                    # so the pdf is derived from the score
+                    # TODO: We should check if this is the case all the time.
+                    link_mediaobject_was_derived_from(source_id=xmlmediaobject_ceid,
+                                                      derived_id=pdfmediaobject_ceid)
     else:
         logger.info(" - No composer??, skipping")
 
