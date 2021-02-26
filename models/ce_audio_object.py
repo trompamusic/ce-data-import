@@ -25,10 +25,10 @@ class CE_AudioObject(CE_BaseModel, AudioObject):
              "creator": self.creator,
              "contributor": self.contributor,
              "format_": self.format,
-             "encodingFormat": self.format,
+             "encodingformat": self.format,
              "source": self.source,
              "subject": self.name,
-             "contentUrl": self.contentUrl,
+             "contenturl": self.contentUrl,
              "language": self.language
              }
         if self.identifier is not None:

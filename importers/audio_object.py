@@ -5,7 +5,7 @@ import json
 import trompace as ce
 
 from trompace.connection import submit_query
-from trompace.mutations.audioobject import mutation_update_audio_object, mutation_create_audio_object, mutation_merge_audio_object_work_example
+from trompace.mutations.audioobject import mutation_update_audioobject, mutation_create_audioobject, mutation_merge_audioobject_exampleofwork
 from trompace.mutations.musiccomposition import mutation_update_music_composition, mutation_create_music_composition, mutation_merge_music_composition_composer
 from trompace.mutations.person import mutation_update_person, mutation_create_person, mutation_person_add_exact_match_person
 from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
@@ -118,12 +118,12 @@ async def import_tracks(key: str):
         if track.identifier is not None:
             print(f"Updating record {track.identifier} in Trompa CE\n")
 
-            response = await ce.connection.submit_query_async(mutation_update_audio_object(**track.as_dict()))
+            response = await ce.connection.submit_query_async(mutation_update_audioobject(**track.as_dict()))
             track.identifier = response["data"]["UpdateAudioObject"]["identifier"]
         else:
             print("Inserting new track {} in Trompa CE\n".format(track.title))
 
-            response = await ce.connection.submit_query_async(mutation_create_audio_object(**track.as_dict()))
+            response = await ce.connection.submit_query_async(mutation_create_audioobject(**track.as_dict()))
             track.identifier = response["data"]["CreateAudioObject"]["identifier"]
 
     print(f"Importing tracks {track.identifier} done.\n")
@@ -132,7 +132,7 @@ async def import_tracks(key: str):
     # Linking MUSICCOMPOSITIONS and AUDIOOBJECTS
     # Loop the musicworks identifiers and link them to audioobjects
     #####################################
-    query = mutation_merge_audio_object_work_example(track.identifier, work.identifier)
+    query = mutation_merge_audioobject_exampleofwork(track.identifier, work.identifier)
     response = await ce.connection.submit_query_async(query)
     print(f"   - Linking MusicComposition {work.identifier} to AudioObject {track.identifier} done.")
 
@@ -298,7 +298,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                         )
                         person.description = ppl['description']
                     elif prov_name == 'WIKIPEDIA_EN':
-                        ext_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
+                        wiki_data_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
                         ppl = load_person_from_wikipedia(wiki_data_link, 'en')
                         person = CE_Person(
                             identifier = None,
@@ -312,7 +312,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                         person.description = ppl['description']
 
                     elif prov_name == 'WIKIPEDIA_NL':
-                        ext_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
+                        wiki_data_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
                         ppl = load_person_from_wikipedia(wiki_data_link, 'nl')
                         person = CE_Person(
                             identifier = None,
