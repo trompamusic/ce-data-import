@@ -21,7 +21,7 @@ from muziekweb_api import get_album_information, get_track_information, get_arti
 from importers.isni import load_person_from_isni
 from importers.musicbrainz import load_person_from_musicbrainz
 from importers.viaf import load_person_from_viaf
-from importers.wikidata import load_person_from_wikidata, load_person_from_wikipedia
+from importers.wikidata import load_person_from_wikidata, load_person_from_wikipedia_wikipedia
 import itertools
 
 MW_AUDIO_URL = "https://www.muziekweb.nl/Embed/{}"
@@ -299,7 +299,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                         person.description = ppl['description']
                     elif prov_name == 'WIKIPEDIA_EN':
                         wiki_data_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
-                        ppl = load_person_from_wikipedia(wiki_data_link, 'en')
+                        ppl = load_person_from_wikipedia_wikipedia(wiki_data_link, 'en')
                         person = CE_Person(
                             identifier = None,
                             name = ppl['name'],
@@ -312,8 +312,8 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                         person.description = ppl['description']
 
                     elif prov_name == 'WIKIPEDIA_NL':
-                        wiki_data_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
-                        ppl = load_person_from_wikipedia(wiki_data_link, 'nl')
+                        wiki_data_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
+                        ppl = load_person_from_wikipedia_wikipedia(wiki_data_link, 'nl')
                         person = CE_Person(
                             identifier = None,
                             name = ppl['name'],
