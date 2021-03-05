@@ -4,7 +4,9 @@ For reference see schema.org: https://schema.org/Person
 """
 
 from dataclasses import dataclass
+
 from . import Thing
+
 
 @dataclass
 class Person(Thing):
@@ -349,4 +351,3 @@ class Person(Thing):
     weight = None
     workLocation = None
     worksFor = None
-    

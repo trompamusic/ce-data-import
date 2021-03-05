@@ -4,7 +4,9 @@ For reference see schema.org: https://schema.org/MusicRecording
 """
 
 from dataclasses import dataclass
+
 from . import CreativeWork
+
 
 @dataclass
 class MusicRecording(CreativeWork):
@@ -425,4 +427,4 @@ class MusicRecording(CreativeWork):
     inAlbum = None
     inPlaylist = None
     isrcCode: str = None
-    recordingOf= None
+    recordingOf = None

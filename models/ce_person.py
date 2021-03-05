@@ -2,7 +2,9 @@
 """
 
 from dataclasses import dataclass
+
 from . import CE_BaseModel, Person
+
 
 @dataclass
 class CE_Person(Person, CE_BaseModel):
@@ -16,7 +18,6 @@ class CE_Person(Person, CE_BaseModel):
         CE_BaseModel.__init__(self, identifier, name, url, contributor, creator)
         self.title = title
         self.source = source
-
 
     def as_dict(self):
         d = {"title": self.title,

@@ -2,14 +2,15 @@
 Local functions to select data from the Trompa CE.
 """
 import trompace as ce
-from trompace.connection import submit_query, submit_query_async
+from trompace.connection import submit_query
 
 """
 Constants for registry in Trompa
 """
 GLOBAL_CONTRIBUTOR = "muziekweb.nl"
-GLOBAL_PUBLISHER = "https://www.muziekweb.nl" # CE Publisher id????
+GLOBAL_PUBLISHER = "https://www.muziekweb.nl"  # CE Publisher id????
 GLOBAL_IMPORTER_REPO = "https://github.com/trompamusic/ce-import-muziekweb"
+
 
 async def queryFor(dataType, field, value):
     """
@@ -29,7 +30,7 @@ async def queryFor(dataType, field, value):
 
     resultset = ce.connection.submit_query(search_query)
     # resultset = await ce.connection.submit_query_async(search_query)
-    
+
     return resultset["data"][dataType]
 
 

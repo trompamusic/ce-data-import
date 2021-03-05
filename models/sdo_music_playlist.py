@@ -4,7 +4,9 @@ For reference see schema.org: https://schema.org/MusicPlaylist
 """
 
 from dataclasses import dataclass
+
 from . import CreativeWork
+
 
 @dataclass
 class MusicPlaylist(CreativeWork):
@@ -410,4 +412,4 @@ class MusicPlaylist(CreativeWork):
     """
 
     numTracks: int = None
-    track= None
+    track = None

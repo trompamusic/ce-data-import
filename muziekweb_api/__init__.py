@@ -1,7 +1,7 @@
 """
 Basic use of the Muziekweb REST API.
 """
-import urllib.request, getpass
+import urllib.request
 from xml.dom import minidom
 
 """
@@ -10,6 +10,7 @@ Constants for Muziekweb API
 MW_API_HOST = "http://api.cdr.nl:8080"
 
 _api_activated = False
+
 
 def set_api_account(user, password):
     global _api_activated
@@ -28,7 +29,7 @@ def get_album_information(key: str):
 
     if _api_activated:
         # Use the Muziekweb API to retrieve all the tracks on the album
-        response  = urllib.request.urlopen(f"{MW_API_HOST}/v2/search/albumInformation.xml?albumID={key}")
+        response = urllib.request.urlopen(f"{MW_API_HOST}/v2/search/albumInformation.xml?albumID={key}")
         body = response.read()
 
         if len(body) > 0:
@@ -37,12 +38,13 @@ def get_album_information(key: str):
 
     return None
 
+
 def get_track_information(key: str):
     # global _api_activated
 
     if _api_activated:
         # Use the Muziekweb API to retrieve all the tracks on the album
-        response  = urllib.request.urlopen(f"{MW_API_HOST}/singlesearch/singleSearch.xml?q={key}")
+        response = urllib.request.urlopen(f"{MW_API_HOST}/singlesearch/singleSearch.xml?q={key}")
         body = response.read()
 
         if len(body) > 0:
@@ -57,7 +59,7 @@ def get_artist_information(key: str):
 
     if _api_activated:
         # Use the Muziekweb API to retrieve all the tracks on the album
-        response  = urllib.request.urlopen(f"{MW_API_HOST}/ExtendedInfo/v3/performerInfo.xml?performerLink={key}")
+        response = urllib.request.urlopen(f"{MW_API_HOST}/ExtendedInfo/v3/performerInfo.xml?performerLink={key}")
         body = response.read()
 
         if len(body) > 0:
@@ -65,4 +67,3 @@ def get_artist_information(key: str):
             return minidom.parseString(body)
 
     return None
-

@@ -4,7 +4,9 @@ For reference see schema.org: https://schema.org/MediaObject
 """
 
 from dataclasses import dataclass
+
 from . import CreativeWork
+
 
 @dataclass
 class MediaObject(CreativeWork):

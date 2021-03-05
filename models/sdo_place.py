@@ -4,7 +4,9 @@ For reference see schema.org: https://schema.org/Place
 """
 
 from dataclasses import dataclass
+
 from . import Thing
+
 
 @dataclass
 class Place(Thing):

@@ -14,6 +14,7 @@ https://docs.google.com/document/d/1MBocgsTFcJufvjZXA6PY8bUitkxEIaSKD1lJZf9PToM/
 from dataclasses import dataclass
 from datetime import date
 
+
 @dataclass
 class CE_BaseModel():
     """
@@ -117,4 +118,3 @@ class CE_BaseModel():
     description: str = None
     _type: str = None
     _searchScore: float = None
-

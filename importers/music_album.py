@@ -1,16 +1,14 @@
 """
 Muziekweb album importer
 """
-import json
-import trompace as ce
 
-from datetime import datetime, date
 from SPARQLWrapper import SPARQLWrapper, JSON
-from trompace.connection import submit_query
-#from trompace.mutations.music_album import mutation_update_music_album, mutation_create_music_album
-from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
+
 from models import CE_MusicAlbum
+# from trompace.mutations.music_album import mutation_update_music_album, mutation_create_music_album
+from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER
 from .audio_object import import_tracks
+
 
 async def import_album(keys: list):
     """
@@ -82,7 +80,8 @@ async def import_album(keys: list):
 
 
 async def get_mw_album(key: str) -> CE_MusicAlbum:
-    sparql = SPARQLWrapper("https://api.data.muziekweb.nl/datasets/muziekweborganization/Muziekweb/services/Muziekweb/sparql")
+    sparql = SPARQLWrapper(
+        "https://api.data.muziekweb.nl/datasets/muziekweborganization/Muziekweb/services/Muziekweb/sparql")
     sparql.setReturnFormat(JSON)
     qry = f"""PREFIX schema: <http://schema.org/>
     PREFIX vocab: <https://data.muziekweb.nl/vocab/>
@@ -99,11 +98,11 @@ async def get_mw_album(key: str) -> CE_MusicAlbum:
     if len(result) > 0:
         # Now get Muziekweb data
         album = CE_MusicAlbum(
-            identifier = None,
-            name = result[0]["title"]["value"],
-            url = result[0]["url"]["value"],
-            contributor = GLOBAL_CONTRIBUTOR,
-            creator = GLOBAL_IMPORTER_REPO,
+            identifier=None,
+            name=result[0]["title"]["value"],
+            url=result[0]["url"]["value"],
+            contributor=GLOBAL_CONTRIBUTOR,
+            creator=GLOBAL_IMPORTER_REPO,
         )
 
         album.publisher = GLOBAL_PUBLISHER

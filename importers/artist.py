@@ -1,16 +1,15 @@
 """
 Muziekweb artist importer
 """
-import json
-import trompace as ce
+from datetime import date
 
-from datetime import datetime, date
+import trompace as ce
 from SPARQLWrapper import SPARQLWrapper, JSON
 from trompace.connection import submit_query
-from trompace.mutations.person import mutation_update_person, mutation_create_person
-from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
 
 from models import CE_Person
+from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
+
 
 async def import_artist(keys: list):
     """
@@ -39,7 +38,7 @@ async def import_artist(keys: list):
                 description=artist.description,
                 language=artist.language,
                 coverage=None,
-                #formatin="text/html",
+                # formatin="text/html",
                 date=date.today(),
                 disambiguatingDescription=artist.disambiguatingDescription,
                 relation=artist.relatedTo,
@@ -74,7 +73,7 @@ async def import_artist(keys: list):
                 description=artist.description,
                 language=artist.language,
                 coverage=None,
-                #formatin="text/html",
+                # formatin="text/html",
                 date=date.today(),
                 disambiguatingDescription=artist.disambiguatingDescription,
                 relation=artist.relatedTo,
@@ -108,7 +107,8 @@ async def import_artist(keys: list):
 
 
 async def get_mw_artist(key: str) -> CE_Person:
-    sparql = SPARQLWrapper("https://api.data.muziekweb.nl/datasets/muziekweborganization/Muziekweb/services/Muziekweb/sparql")
+    sparql = SPARQLWrapper(
+        "https://api.data.muziekweb.nl/datasets/muziekweborganization/Muziekweb/services/Muziekweb/sparql")
     sparql.setReturnFormat(JSON)
     qry = f"""PREFIX schema: <http://schema.org/>
     PREFIX vocab: <https://data.muziekweb.nl/vocab/>
@@ -126,11 +126,11 @@ async def get_mw_artist(key: str) -> CE_Person:
     if len(result) > 0:
         # Now get Muziekweb data
         person = CE_Person(
-            identifier = None,
-            name = result[0]["name"]["value"],
-            url = result[0]["url"]["value"],
-            contributor = GLOBAL_CONTRIBUTOR,
-            creator = GLOBAL_IMPORTER_REPO,
+            identifier=None,
+            name=result[0]["name"]["value"],
+            url=result[0]["url"]["value"],
+            contributor=GLOBAL_CONTRIBUTOR,
+            creator=GLOBAL_IMPORTER_REPO,
         )
 
         person.publisher = GLOBAL_PUBLISHER
@@ -141,4 +141,3 @@ async def get_mw_artist(key: str) -> CE_Person:
         return person
 
     return None
-

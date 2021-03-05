@@ -4,7 +4,9 @@ For reference see schema.org: https://schema.org/Organization
 """
 
 from dataclasses import dataclass
+
 from . import Thing
+
 
 @dataclass
 class Organization(Thing):

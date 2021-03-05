@@ -5,6 +5,7 @@ For reference see schema.org: https://schema.org/Thing
 
 from dataclasses import dataclass
 
+
 @dataclass
 class Thing:
     """

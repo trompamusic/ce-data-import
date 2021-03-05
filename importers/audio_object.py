@@ -1,23 +1,24 @@
 """
 Muziekweb music fragment importer
 """
+import itertools
+
 import trompace as ce
-
 from trompace.connection import submit_query
-from trompace.mutations.audioobject import mutation_update_audioobject, mutation_create_audioobject, mutation_merge_audioobject_exampleofwork
-from trompace.mutations.musiccomposition import mutation_update_music_composition, mutation_create_music_composition, mutation_merge_music_composition_composer
-from trompace.mutations.person import mutation_update_person, mutation_create_person, mutation_person_add_exact_match_person
-from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
-
-
-from models import CE_AudioObject, CE_Person, CE_MusicComposition
-from muziekweb_api import get_album_information, get_artist_information
+from trompace.mutations.audioobject import mutation_update_audioobject, mutation_create_audioobject, \
+    mutation_merge_audioobject_exampleofwork
+from trompace.mutations.musiccomposition import mutation_update_music_composition, mutation_create_music_composition, \
+    mutation_merge_music_composition_composer
+from trompace.mutations.person import mutation_update_person, mutation_create_person, \
+    mutation_person_add_exact_match_person
 
 from ceimport.sites.isni import load_person_from_isni
 from ceimport.sites.musicbrainz import load_person_from_musicbrainz
 from ceimport.sites.viaf import load_person_from_viaf
 from ceimport.sites.wikidata import load_person_from_wikidata, load_person_from_wikipedia
-import itertools
+from models import CE_AudioObject, CE_Person, CE_MusicComposition
+from muziekweb_api import get_album_information, get_artist_information
+from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
 
 MW_AUDIO_URL = "https://www.muziekweb.nl/Embed/{}"
 MW_MUSIC_URL = "https://www.muziekweb.nl/en/Link/{}/{}/{}"
@@ -47,7 +48,6 @@ async def import_tracks(key: str):
 
         if person.identifier is not None:
             print(f"Updating person {person.identifier} in Trompa CE\n")
-
 
             response = await ce.connection.submit_query_async(mutation_update_person(**person.as_dict()))
             person.identifier = response["data"]["UpdatePerson"]["identifier"]
@@ -101,7 +101,6 @@ async def import_tracks(key: str):
         response = await ce.connection.submit_query_async(query)
         print(f"   - Linking Person {person_id} to MusicComposition {work.identifier} done.\n")
 
-
     #####################################
     # AUDIOOBJECTS
     # Loop the tracks to create the CE_AudioObject on the CE
@@ -142,15 +141,14 @@ def get_mw_audio(key: str) -> [CE_AudioObject]:
         audio_objects = list()
 
         for track in doc.getElementsByTagName('Track'):
-
             trackId = track.getElementsByTagName('AlbumTrackID')[0].firstChild.data
 
             audio_object = CE_AudioObject(
-                identifier = None,
-                name = trackId,
-                url = MW_AUDIO_URL.format(trackId),
-                contributor = GLOBAL_CONTRIBUTOR,
-                creator = GLOBAL_IMPORTER_REPO,
+                identifier=None,
+                name=trackId,
+                url=MW_AUDIO_URL.format(trackId),
+                contributor=GLOBAL_CONTRIBUTOR,
+                creator=GLOBAL_IMPORTER_REPO,
             )
 
             audio_object.title = track.getElementsByTagName('TrackTitle')[0].firstChild.data
@@ -162,6 +160,7 @@ def get_mw_audio(key: str) -> [CE_AudioObject]:
         return audio_objects
 
     return None
+
 
 def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
     # Use the Muziekweb API to retrieve one track
@@ -184,11 +183,11 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
             if trackId == key:
                 # append audio object
                 audio_object = CE_AudioObject(
-                    identifier = None,
-                    name = track.getElementsByTagName('TrackTitle')[0].firstChild.data,
-                    url = MW_AUDIO_URL.format(trackId),
-                    contributor = GLOBAL_CONTRIBUTOR,
-                    creator = GLOBAL_IMPORTER_REPO,
+                    identifier=None,
+                    name=track.getElementsByTagName('TrackTitle')[0].firstChild.data,
+                    url=MW_AUDIO_URL.format(trackId),
+                    contributor=GLOBAL_CONTRIBUTOR,
+                    creator=GLOBAL_IMPORTER_REPO,
                 )
 
                 audio_object.title = "Muziekweb - de muziekbibliotheek van Nederland"
@@ -203,11 +202,11 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                 unif_style = track.getElementsByTagName('Catalogue')[0].firstChild.data.split(' ')[0]
 
                 music_work = CE_MusicComposition(
-                    identifier = None,
-                    name = track.getElementsByTagName('TrackTitle')[0].firstChild.data,
-                    url = MW_MUSIC_URL.format(unif_title, unif_style, unif_text),
-                    contributor = GLOBAL_CONTRIBUTOR,
-                    creator = GLOBAL_IMPORTER_REPO,
+                    identifier=None,
+                    name=track.getElementsByTagName('TrackTitle')[0].firstChild.data,
+                    url=MW_MUSIC_URL.format(unif_title, unif_style, unif_text),
+                    contributor=GLOBAL_CONTRIBUTOR,
+                    creator=GLOBAL_IMPORTER_REPO,
                 )
 
                 music_work.title = 'Muziekweb - de muziekbibliotheek van Nederland'
@@ -218,62 +217,63 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                 # append persons
                 perf_link = track.getElementsByTagName('Performer')[0].attributes['Link'].value
                 doc_artist = get_artist_information(perf_link)
-                num_persons = int(doc_artist.getElementsByTagName('ExternalLinks')[0].attributes['Count'].value) 
+                num_persons = int(doc_artist.getElementsByTagName('ExternalLinks')[0].attributes['Count'].value)
                 perf_name = doc_artist.getElementsByTagName('PresentationName')[0].firstChild.data
                 perf_text = perf_name.replace(' ', '-')
 
-                #MW person
+                # MW person
                 person = CE_Person(
-                    identifier = None,
-                    name = '{} - Muziekweb'.format(perf_name),
-                    url = MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
-                    contributor = GLOBAL_CONTRIBUTOR,
-                    creator = GLOBAL_IMPORTER_REPO, 
-                    title = '{} - Muziekweb'.format(perf_name),
-                    source = MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
+                    identifier=None,
+                    name='{} - Muziekweb'.format(perf_name),
+                    url=MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
+                    contributor=GLOBAL_CONTRIBUTOR,
+                    creator=GLOBAL_IMPORTER_REPO,
+                    title='{} - Muziekweb'.format(perf_name),
+                    source=MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
                 )
                 persons.append(person)
 
                 # external links
                 for pers in range(num_persons):
-                    
+
                     prov_name = doc_artist.getElementsByTagName('ExternalLink')[pers].attributes['Provider'].value
                     print('Searching for person: {} - {}'.format(perf_name, prov_name))
-                    ext_link = doc_artist.getElementsByTagName('ExternalLinks')[0].getElementsByTagName('Link')[pers].firstChild.data
+                    ext_link = doc_artist.getElementsByTagName('ExternalLinks')[0].getElementsByTagName('Link')[
+                        pers].firstChild.data
                     if prov_name == 'ISNI':
                         ext_link = MW_MUSIC_URL.format(perf_link, unif_style, ext_link)
                         ppl = load_person_from_isni(ext_link)
                         person = CE_Person(
-                            identifier = None,
-                            name = ppl['title'],
-                            url = ppl['source'],
-                            contributor = ppl['contributor'],
-                            creator = GLOBAL_IMPORTER_REPO,
-                            title = ppl['title'],
-                            source = ppl['source'],
+                            identifier=None,
+                            name=ppl['title'],
+                            url=ppl['source'],
+                            contributor=ppl['contributor'],
+                            creator=GLOBAL_IMPORTER_REPO,
+                            title=ppl['title'],
+                            source=ppl['source'],
                         )
                     elif prov_name == 'VIAF':
                         ppl = load_person_from_viaf(ext_link)
                         person = CE_Person(
-                            identifier = None,
-                            name = ppl['title'],
-                            url = ppl['source'],
-                            contributor = ppl['contributor'],
-                            creator = GLOBAL_IMPORTER_REPO,
-                            title = ppl['title'],
-                            source = ppl['source'],
+                            identifier=None,
+                            name=ppl['title'],
+                            url=ppl['source'],
+                            contributor=ppl['contributor'],
+                            creator=GLOBAL_IMPORTER_REPO,
+                            title=ppl['title'],
+                            source=ppl['source'],
                         )
                     elif prov_name == 'MUSICBRAINZ':
                         mbid = ext_link.split('/')[-1]
                         ppl = load_person_from_musicbrainz(mbid)
                         person = CE_Person(
-                            identifier = None,
-                            name = ppl['title'],
-                            url = ppl['source'],
-                            contributor = ppl['contributor'],
-                            creator = GLOBAL_IMPORTER_REPO,
-                            title = ppl['title'],
-                            source = ppl['source'],
+                            identifier=None,
+                            name=ppl['title'],
+                            url=ppl['source'],
+                            contributor=ppl['contributor'],
+                            creator=GLOBAL_IMPORTER_REPO,
+                            title=ppl['title'],
+                            source=ppl['source'],
                         )
                         person.birthPlace = ppl['birthplace']
                         person.birthDate = ppl['birth_date']
@@ -282,26 +282,26 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                     elif prov_name == 'WIKIDATA':
                         ppl = load_person_from_wikidata(ext_link)
                         person = CE_Person(
-                            identifier = None,
-                            name = ppl['title'],
-                            url = ppl['source'],
-                            contributor = ppl['contributor'],
-                            creator = GLOBAL_IMPORTER_REPO,
-                            title = ppl['title'],
-                            source = ppl['source'],
+                            identifier=None,
+                            name=ppl['title'],
+                            url=ppl['source'],
+                            contributor=ppl['contributor'],
+                            creator=GLOBAL_IMPORTER_REPO,
+                            title=ppl['title'],
+                            source=ppl['source'],
                         )
                         person.description = ppl['description']
                     elif prov_name == 'WIKIPEDIA_EN':
                         en_wiki_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
                         ppl = load_person_from_wikipedia(en_wiki_link, 'en')
                         person = CE_Person(
-                            identifier = None,
-                            name = ppl['name'],
-                            url = ppl['source'],
-                            contributor = ppl['contributor'],
-                            creator = GLOBAL_IMPORTER_REPO,
-                            title = ppl['title'],
-                            source = ppl['source'],
+                            identifier=None,
+                            name=ppl['name'],
+                            url=ppl['source'],
+                            contributor=ppl['contributor'],
+                            creator=GLOBAL_IMPORTER_REPO,
+                            title=ppl['title'],
+                            source=ppl['source'],
                         )
                         person.description = ppl['description']
 
@@ -309,13 +309,13 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                         nl_wiki_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
                         ppl = load_person_from_wikipedia(nl_wiki_link, 'nl')
                         person = CE_Person(
-                            identifier = None,
-                            name = ppl['name'],
-                            url = ppl['source'],
-                            contributor = ppl['contributor'],
-                            creator = GLOBAL_IMPORTER_REPO,
-                            title = ppl['title'],
-                            source = ppl['source'],
+                            identifier=None,
+                            name=ppl['name'],
+                            url=ppl['source'],
+                            contributor=ppl['contributor'],
+                            creator=GLOBAL_IMPORTER_REPO,
+                            title=ppl['title'],
+                            source=ppl['source'],
                         )
                         person.description = ppl['description']
                     else:
@@ -329,17 +329,16 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                             continue
 
                         person = CE_Person(
-                            identifier = None,
-                            name = '{} - {}'.format(perf_name, prov_name),
-                            url = ext_link,
-                            contributor = contributor,
-                            creator = GLOBAL_IMPORTER_REPO,
-                            title = '{} - {}'.format(perf_name, prov_name),
-                            source = ext_link,
+                            identifier=None,
+                            name='{} - {}'.format(perf_name, prov_name),
+                            url=ext_link,
+                            contributor=contributor,
+                            creator=GLOBAL_IMPORTER_REPO,
+                            title='{} - {}'.format(perf_name, prov_name),
+                            source=ext_link,
                         )
                     persons.append(person)
                     print('External link: {}'.format(ext_link))
-
 
         return audio_objects, music_works, persons
 
