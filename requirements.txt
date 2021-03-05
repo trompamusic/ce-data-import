@@ -1,0 +1,16 @@
+asyncio>=3.4.3
+dataclasses>=0.6
+pytest>=5.3.5
+rdflib>=4.2.2
+rdflib-jsonld>=0.4.0
+requests>=2.22.0
+SPARQLWrapper>=1.8.5
+websockets>=8.1
+python-dotenv>=0.13.0
+trompace-client
+Wikidata>=0.7.0
+wikipedia>=1.4.0
+redis>=3.5.3
+redis-decorator>=0.4
+beautifulsoup4>=4.9.3
+musicbrainzngs>=0.7.1
