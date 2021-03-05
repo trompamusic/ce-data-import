@@ -7,9 +7,9 @@ from trompace.connection import submit_query
 """
 Constants for registry in Trompa
 """
-GLOBAL_CONTRIBUTOR = "muziekweb.nl"
+GLOBAL_CONTRIBUTOR = "https://www.muziekweb.nl"
 GLOBAL_PUBLISHER = "https://www.muziekweb.nl"  # CE Publisher id????
-GLOBAL_IMPORTER_REPO = "https://github.com/trompamusic/ce-import-muziekweb"
+GLOBAL_IMPORTER_REPO = "https://github.com/trompamusic/ce-data-import"
 
 
 async def queryFor(dataType, field, value):
