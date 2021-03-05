@@ -1,7 +1,6 @@
 """
 Muziekweb music fragment importer
 """
-import json
 import trompace as ce
 
 from trompace.connection import submit_query
@@ -12,16 +11,12 @@ from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBL
 
 
 from models import CE_AudioObject, CE_Person, CE_MusicComposition
-from muziekweb_api import get_album_information, get_track_information, get_artist_information
+from muziekweb_api import get_album_information, get_artist_information
 
-# from ceimport.sites.isni import load_person_from_isni
-# from ceimport.sites.musicbrainz import load_person_from_musicbrainz
-# from ceimport.sites.viaf import load_person_from_viaf
-# from ceimport.sites.wikidata import load_person_from_wikidata, load_person_from_wikipedia
-from importers.isni import load_person_from_isni
-from importers.musicbrainz import load_person_from_musicbrainz
-from importers.viaf import load_person_from_viaf
-from importers.wikidata import load_person_from_wikidata, load_person_from_wikipedia_wikipedia
+from ceimport.sites.isni import load_person_from_isni
+from ceimport.sites.musicbrainz import load_person_from_musicbrainz
+from ceimport.sites.viaf import load_person_from_viaf
+from ceimport.sites.wikidata import load_person_from_wikidata, load_person_from_wikipedia
 import itertools
 
 MW_AUDIO_URL = "https://www.muziekweb.nl/Embed/{}"
@@ -69,7 +64,7 @@ async def import_tracks(key: str):
 
     #####################################
     # Linking PERSONS
-    # Loop the person identifiers and link them 
+    # Loop the person identifiers and link them
     #####################################
     for from_id, to_id in itertools.permutations(list_person_ids, 2):
         query = mutation_person_add_exact_match_person(from_id, to_id)
@@ -83,7 +78,7 @@ async def import_tracks(key: str):
     for work in music_works:
 
         work.identifier = await lookupIdentifier("MusicComposition", work.source)
-        
+
         if work.identifier is not None:
             print(f"Updating work {work.identifier} in Trompa CE\n", end="")
 
@@ -114,7 +109,7 @@ async def import_tracks(key: str):
     for track in tracks:
 
         track.identifier = await lookupIdentifier("AudioObject", track.source)
-        
+
         if track.identifier is not None:
             print(f"Updating record {track.identifier} in Trompa CE\n")
 
@@ -195,7 +190,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                     contributor = GLOBAL_CONTRIBUTOR,
                     creator = GLOBAL_IMPORTER_REPO,
                 )
-                
+
                 audio_object.title = "Muziekweb - de muziekbibliotheek van Nederland"
                 audio_object.publisher = GLOBAL_PUBLISHER
                 audio_object.description = 'Embed in frame using the following code: <iframe width="300" height="30" src="[url]" frameborder="no" scrolling="no" allowtransparency="true"></iframe>'
@@ -206,7 +201,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                 unif_title = track.getElementsByTagName('UniformTitle')[0].attributes['Link'].value
                 unif_text = track.getElementsByTagName('UniformTitle')[0].firstChild.data.replace(' ', '-')
                 unif_style = track.getElementsByTagName('Catalogue')[0].firstChild.data.split(' ')[0]
-                
+
                 music_work = CE_MusicComposition(
                     identifier = None,
                     name = track.getElementsByTagName('TrackTitle')[0].firstChild.data,
@@ -286,7 +281,6 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                         person.deathDate = ppl['death_date']
                     elif prov_name == 'WIKIDATA':
                         ppl = load_person_from_wikidata(ext_link)
-                        wiki_data_link = ext_link
                         person = CE_Person(
                             identifier = None,
                             name = ppl['title'],
@@ -298,8 +292,8 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                         )
                         person.description = ppl['description']
                     elif prov_name == 'WIKIPEDIA_EN':
-                        wiki_data_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
-                        ppl = load_person_from_wikipedia_wikipedia(wiki_data_link, 'en')
+                        en_wiki_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
+                        ppl = load_person_from_wikipedia(en_wiki_link, 'en')
                         person = CE_Person(
                             identifier = None,
                             name = ppl['name'],
@@ -312,8 +306,8 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                         person.description = ppl['description']
 
                     elif prov_name == 'WIKIPEDIA_NL':
-                        wiki_data_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
-                        ppl = load_person_from_wikipedia_wikipedia(wiki_data_link, 'nl')
+                        nl_wiki_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
+                        ppl = load_person_from_wikipedia(nl_wiki_link, 'nl')
                         person = CE_Person(
                             identifier = None,
                             name = ppl['name'],

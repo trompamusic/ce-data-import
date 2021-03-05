@@ -36,11 +36,12 @@ def load_person_from_wikidata(wikidata_url):
         return {}
 
 
-def load_person_from_wikipedia(wikidata_url, language):
+def load_person_from_wikidata(wikidata_url, language):
     """Given a wikidata url, get information from wikipedia
     TODO: Allow a wikipedia URL as argument too
     TODO: Check language against valid list
     TODO: Image from wikipedia is different to that of wikidata"""
+
     entity = get_entity_for_wikidata(wikidata_url)
 
     wikipedia_url = get_url_for_wikipedia(entity, language)
@@ -54,7 +55,32 @@ def load_person_from_wikipedia(wikidata_url, language):
             "title": title,
             "name": label,
             "description": description,
-            "contributor": "https://wikipedia.org",
+            "contributor": "https://wikipedia.org/",
+            "source": wikipedia_url,
+            "format_": "text/html",
+            "language": language
+        }
+    else:
+        return {}
+
+
+def load_person_from_wikipedia(wikipedia_url, language):
+    """Given a wikipedia url, get information from wikipedia
+    TODO: Check language against valid list
+    TODO: Image from wikipedia is different to that of wikidata"""
+
+    page = get_page_for_wikipedia(wikipedia_url)
+    label = page.title
+    description = page.summary
+
+    if label:
+        title = f"{label} - Wikipedia"
+
+        return {
+            "title": title,
+            "name": label,
+            "description": description,
+            "contributor": "https://wikipedia.org/",
             "source": wikipedia_url,
             "format_": "text/html",
             "language": language
@@ -148,3 +174,11 @@ def get_description_for_wikipedia(wd_entity, language):
     title = wiki.get("title")
 
     return get_description_from_wikipedia(title)
+
+
+def get_page_for_wikipedia(wikipedia_url):
+    parts = urlparse(wikipedia_url)
+    wp_name = parts.path.split("/")[-1].replace("_", " ")
+    page = wikipedia.page(wp_name)
+
+    return page

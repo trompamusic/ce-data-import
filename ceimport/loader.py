@@ -49,7 +49,7 @@ def load_artist_from_musicbrainz(artist_mbid):
         wd_person = wikidata.load_person_from_wikidata(rels['wikidata'])
         if wd_person:
             persons.append(wd_person)
-        wp_person = wikidata.load_person_from_wikipedia(rels['wikidata'], 'en')
+        wp_person = wikidata.load_person_from_wikidata(rels['wikidata'], 'en')
         if wp_person:
             persons.append(wp_person)
 
@@ -286,7 +286,7 @@ def load_artist_from_imslp(url):
             wd_person = wikidata.load_person_from_wikidata(rels['wikidata'])
             if wd_person:
                 people.append(wd_person)
-            wp_person = wikidata.load_person_from_wikipedia(rels['wikidata'], 'en')
+            wp_person = wikidata.load_person_from_wikidata(rels['wikidata'], 'en')
             if wp_person:
                 people.append(wp_person)
     if 'musicbrainz' in rels:
@@ -443,7 +443,7 @@ def import_cpdl_composer_wikitext(composer_wikitext):
             wd_person = wikidata.load_person_from_wikidata(wikidata_id)
             if wd_person:
                 persons.append(wd_person)
-            wp_person = wikidata.load_person_from_wikipedia(wikidata_id, 'en')
+            wp_person = wikidata.load_person_from_wikdata(wikidata_id, 'en')
             if wp_person:
                 persons.append(wp_person)
     create_persons_and_link(persons)
