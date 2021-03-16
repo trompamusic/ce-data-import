@@ -44,7 +44,7 @@ def get_fileurl_from_media(media: List[str]):
     for n in normalised:
         norm_mapping[n['from']] = n['to']
 
-    pages = j.get("query", {}).get("pages", [])
+    pages = j.get("query", {}).get("pages", {})
 
     image_info = {}
     for k, v in pages.items():
@@ -180,8 +180,11 @@ def get_file_pairs_from_composition_wikitext(wikitext):
     for i in range(len(cpdl_nodes)-1):
         start = cpdl_nodes[i]
         end = cpdl_nodes[i+1]
-        start_i = parsed_nodes.index(start)
-        end_i = parsed_nodes.index(end)
+        try:
+            start_i = parsed_nodes.index(start)
+            end_i = parsed_nodes.index(end)
+        except ValueError:
+            continue
         relevant_nodes = parsed_nodes[start_i:end_i]
         wikilinks = [n for n in relevant_nodes if isinstance(n, mwph.nodes.Wikilink)]
         xml_templates = [str(n.title) for n in wikilinks if n.text == "{{XML}}"]
@@ -190,8 +193,11 @@ def get_file_pairs_from_composition_wikitext(wikitext):
         if len(xml_templates) == 1 and len(pdf_templates) in [0, 1]:
             xml = xml_templates[0]
             pdf = pdf_templates[0] if len(pdf_templates) else None
-            ret.append({"xml": xml.replace("Media:", "File:"),
-                        "pdf": pdf.replace("Media:", "File:")})
+            data = {"xml": xml.replace("Media:", "File:")}
+            if pdf:
+                data["pdf"] = pdf.replace("Media:", "File:")
+
+            ret.append(data)
 
     return ret
 
@@ -201,7 +207,7 @@ def composition_wikitext_to_mediaobjects(wikitext):
     file_names = []
     for f in files:
         file_names.append(f["xml"])
-        if f["pdf"]:
+        if "pdf" in f and f["pdf"]:
             file_names.append(f["pdf"])
 
     file_urls = get_fileurl_from_media(file_names)
@@ -209,7 +215,9 @@ def composition_wikitext_to_mediaobjects(wikitext):
 
     for f in files:
         xml = f["xml"]
-        xml_url = file_urls[xml]
+        xml_url = file_urls.get(xml)
+        if not xml_url:
+            continue
         url = xml_url['url']
         descriptionurl = xml_url['descriptionurl']
         if url.endswith(".xml"):
@@ -233,25 +241,26 @@ def composition_wikitext_to_mediaobjects(wikitext):
         }
 
         pdfmediaobject = None
-        if f["pdf"]:
+        if "pdf" in f:
             pdf = f["pdf"]
-            pdf_url = file_urls[pdf]
-            url = pdf_url['url']
-            descriptionurl = pdf_url['descriptionurl']
-            format = 'application/pdf'
-            # TODO: Should this filename have the 'File:' prefix?
-            filename = os.path.basename(descriptionurl)
-            title = f"{filename} - ChoralWiki"
+            pdf_url = file_urls.get(pdf)
+            if pdf_url:
+                url = pdf_url['url']
+                descriptionurl = pdf_url['descriptionurl']
+                format = 'application/pdf'
+                # TODO: Should this filename have the 'File:' prefix?
+                filename = os.path.basename(descriptionurl)
+                title = f"{filename} - ChoralWiki"
 
-            pdfmediaobject = {
-                'title': title,  # <title> of html
-                'name': filename,  # name of file
-                'contributor': 'https://cpdl.org',
-                'source': descriptionurl,  # url of a webpage about the file
-                'contenturl': url,  # url to the actual file
-                'encodingformat': format,  # mimetype of the actual file
-                'format_': 'text/html'  # mimetype of the webpage (source)
-            }
+                pdfmediaobject = {
+                    'title': title,  # <title> of html
+                    'name': filename,  # name of file
+                    'contributor': 'https://cpdl.org',
+                    'source': descriptionurl,  # url of a webpage about the file
+                    'contenturl': url,  # url to the actual file
+                    'encodingformat': format,  # mimetype of the actual file
+                    'format_': 'text/html'  # mimetype of the webpage (source)
+                }
 
         ret.append({"xml": xmlmediaobject, "pdf": pdfmediaobject})
     return ret

@@ -417,6 +417,9 @@ def files_for_work(work_wikitext):
 
     # A page should have one node, the #fte:imslppage template
     nodes = parsed.nodes
+    if not isinstance(nodes[0], mwph.nodes.template.Template):
+        logger.info("First node doesn't appear to be a template, skipping")
+        return {}
     if not nodes or str(nodes[0].name).strip() != "#fte:imslppage":
         logger.info("Cannot find #fte:imslppage node, skipping")
         return {}

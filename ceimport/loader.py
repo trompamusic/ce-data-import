@@ -514,8 +514,8 @@ def import_cpdl_work_wikitext(work_wikitext):
                 xmlmediaobject_ceid = get_or_create_mediaobject(xml)
                 link_musiccomposition_and_mediaobject(composition_id=musiccomp_ceid,
                                                       mediaobject_id=xmlmediaobject_ceid)
-                pdf = mo["pdf"]
-                if pdf:
+                if "pdf" in mo and mo["pdf"] is not None:
+                    pdf = mo["pdf"]
                     pdfmediaobject_ceid = get_or_create_mediaobject(pdf)
                     link_musiccomposition_and_mediaobject(composition_id=musiccomp_ceid,
                                                           mediaobject_id=pdfmediaobject_ceid)
