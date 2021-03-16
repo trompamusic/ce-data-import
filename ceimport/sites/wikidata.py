@@ -36,7 +36,7 @@ def load_person_from_wikidata(wikidata_url):
         return {}
 
 
-def load_person_from_wikidata(wikidata_url, language):
+def load_wikipedia_person_from_wikidata(wikidata_url, language):
     """Given a wikidata url, get information from wikipedia
     TODO: Allow a wikipedia URL as argument too
     TODO: Check language against valid list

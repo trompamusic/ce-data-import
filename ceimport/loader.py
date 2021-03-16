@@ -33,7 +33,8 @@ def load_artist_from_musicbrainz(artist_mbid):
         persons.append(viaf_person)
     if 'imslp' in rels:
         # TODO: If there are more rels in imslp that aren't in MB we could use them here
-        imslp_person = imslp.api_composer(rels['imslp'])
+        imslp_url = rels['imslp']
+        imslp_person = imslp.api_composer(imslp_url.replace("https://imslp.org/wiki/", "").replace("_", " "))
         persons.append(imslp_person)
     if 'worldcat' in rels:
         worldcat_person = worldcat.load_person_from_worldcat(rels['worldcat'])
@@ -49,7 +50,7 @@ def load_artist_from_musicbrainz(artist_mbid):
         wd_person = wikidata.load_person_from_wikidata(rels['wikidata'])
         if wd_person:
             persons.append(wd_person)
-        wp_person = wikidata.load_person_from_wikidata(rels['wikidata'], 'en')
+        wp_person = wikidata.load_wikipedia_person_from_wikidata(rels['wikidata'], 'en')
         if wp_person:
             persons.append(wp_person)
 
@@ -167,6 +168,12 @@ def link_musiccomposition_and_composers(musiccomposition_id, composer_ids):
         connection.submit_request(query)
 
 
+def link_musiccomposition_exactmatch(musiccomposition_ids):
+    for from_id, to_id in itertools.permutations(musiccomposition_ids, 2):
+        query = mutation_musiccomposition.mutation_merge_music_composition_exact_match(from_id, to_id)
+        connection.submit_request(query)
+
+
 def link_person_ids(person_ids):
     for from_id, to_id in itertools.permutations(person_ids, 2):
         query = mutation_person.mutation_person_add_exact_match_person(from_id, to_id)
@@ -257,6 +264,10 @@ def load_musiccomposition_from_musicbrainz(work_mbid):
     # Link composer to all parts
     for part_id in all_part_ids:
         link_musiccomposition_and_composers(part_id, composer_ids)
+
+    return {"musiccomposition_id": musiccomp_ceid,
+            "part_ids": all_part_ids,
+            "person_ids": composer_ids}
 
 
 def load_artist_from_imslp(url):
@@ -371,6 +382,7 @@ def load_musiccomposition_from_imslp_name(imslp_name, load_files=True):
     work = imslp.api_work(imslp_name)
     musiccomposition = work["work"]
     composer = work["composer"]
+    musicbrainz_work_id = work["musicbrainz_work_id"]
 
     if composer:
         composition_id = get_or_create_musiccomposition(musiccomposition)
@@ -384,6 +396,11 @@ def load_musiccomposition_from_imslp_name(imslp_name, load_files=True):
             existing_composer_ceid = get_existing_person_by_source(composer_source)
 
         link_musiccomposition_and_composers(composition_id, [existing_composer_ceid])
+
+        if musicbrainz_work_id:
+            mb_work = load_musiccomposition_from_musicbrainz(musicbrainz_work_id)
+            mb_work_ceid = mb_work["musiccomposition_id"]
+            link_musiccomposition_exactmatch([composition_id, mb_work_ceid])
 
         if not load_files:
             return

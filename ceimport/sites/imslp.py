@@ -234,7 +234,7 @@ def api_composer(composer_name):
           composer_name: an imslp Category name for a composer"""
     j = imslp_api_raw_query(composer_name)
     if "0" not in j:
-        return None
+        return {}
 
     composer = j["0"]
     extvals = composer["extvals"]
@@ -288,6 +288,13 @@ def api_work(work_name):
     html_page = read_source(url)
     api_page = imslp_api_raw_query(work_name.replace("_", " "))
     api_page = api_page.get('0', {})
+    wikitext = get_wiki_content_for_pages([work_name])
+    parsed = mwph.parse(wikitext[0]["content"])
+    musicbrainz_work_id = None
+    templates = parsed.filter_templates()
+    for t in templates:
+        if t.name == "MusBrnzW":
+            musicbrainz_work_id = t.params[0]
 
     language_mapping = {'english': 'en',
                         'german': 'de',
@@ -323,7 +330,8 @@ def api_work(work_name):
         composer = ""
 
     return {"work": work_dict,
-            "composer": composer}
+            "composer": composer,
+            "musicbrainz_work_id": musicbrainz_work_id}
 
 
 def get_mediaobject_for_filename(work_wikitext, filename):
