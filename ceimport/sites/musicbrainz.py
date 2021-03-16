@@ -96,7 +96,7 @@ def load_person_relations_from_musicbrainz(artist_mbid):
 
 
 def load_work_from_musicbrainz(work_mbid):
-    work = mb.get_work_by_id("94a19e47-2c1d-425b-b4f0-63d62d5bf788", includes=["artist-rels", "work-rels"])['work']
+    work = mb.get_work_by_id(work_mbid, includes=["artist-rels", "work-rels"])['work']
 
     title = work['title']
     work_dict = {
