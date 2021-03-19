@@ -21,8 +21,45 @@ COMPOSER_REL = 'd59d99ea-23d4-4a80-b066-edca32ee158f'
 PARTS_REL = 'ca8d3642-ce5f-49f8-91f2-125d72524e6a'
 
 
-def load_person_from_musicbrainz(artist_mbid):
-    artist = mb.get_artist_by_id(artist_mbid)['artist']
+def get_artist_from_musicbrainz(artist_mbid):
+    """
+    """
+    artist = mb.get_artist_by_id(artist_mbid, includes=['artist-rels'])['artist']
+
+    return artist
+
+
+def load_artist_from_musicbrainz(artist_mbid):
+    """
+    """
+    artist = get_artist_from_musicbrainz(artist_mbid)
+    if artist['type'] == 'Person':
+        artists = [load_person_from_musicbrainz(artist)]
+    elif artist['type'] == 'Group':
+        artists = load_group_from_musicbrainz(artist)
+    return artists
+
+
+def load_group_from_musicbrainz(artist):
+    """
+    """
+    artist_relations = artist.get('artist-relation-list', [])
+    members = []
+    for relation in artist_relations:
+        if relation['type'] != 'member of band':
+            continue
+        else:
+            member = relation.get('artist', {})
+            member = mb.get_artist_by_id(member['id'])['artist']
+            mb_person = load_person_from_musicbrainz(member)
+            members.append(mb_person)
+
+    return members
+
+
+def load_person_from_musicbrainz(artist):
+    """
+    """
     name = artist['name']
 
     '''TODO: add these items?
@@ -32,7 +69,7 @@ def load_person_from_musicbrainz(artist_mbid):
         'honorificPrefix': honorific_prefix,
         'honorificSuffix': honorific_suffix,
         'jobTitle': job_title
-        
+
     Other biblio info? Places, birth date, death date, gender
     language
     If there are aliases in our languages, import them with those languages
@@ -49,20 +86,26 @@ def load_person_from_musicbrainz(artist_mbid):
     born = died = None
     if lifespan:
         born = lifespan.get('begin')
+        if born:
+            if [x for x in born.split("-") if not x.isdigit()]:
+                born = None
         died = lifespan.get('end')
+        if died:
+            if [x for x in died.split("-") if not x.isdigit()]:
+                died = None
 
     return {
         # This is the title of the page, so it includes the header
         'title': f'{name} - MusicBrainz',
         'name': name,
         'contributor': 'https://musicbrainz.org',
-        'source': f'https://musicbrainz.org/artist/{artist_mbid}',
+        'source': f'https://musicbrainz.org/artist/{artist["id"]}',
         'format_': 'text/html',
         'language': 'en',
         'birth_date': born,
         'death_date': died,
-        'birthplace': birthplace,
-        'deathplace': deathplace
+        'birth_place': birthplace,
+        'death_place': deathplace
     }
 
 
