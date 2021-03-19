@@ -15,9 +15,11 @@ def load_person_from_viaf(viaf_url):
         r = session.get(viaf_url)
         r.raise_for_status()
         bs = BeautifulSoup(r.content, features="lxml")
-        title = bs.find("title")
+        viaf_id = bs.find("title").text
+        title = bs.find("div", {"id": "Title"}).find("h2", {"id": "nameEntry1"})
         if title:
-            title = title.text
+            title = title.text.replace("\n", "")
+            title = f"{title} ({viaf_id}) - VIAF"
             return {
                 "title": title,
                 "contributor": "https://viaf.org",
