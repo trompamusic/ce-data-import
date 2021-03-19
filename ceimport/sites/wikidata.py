@@ -1,4 +1,6 @@
 import requests_cache
+import wikipedia
+from wikipedia.exceptions import DisambiguationError, PageError
 from wikidata.client import Client
 from urllib.parse import urlparse
 
@@ -14,7 +16,7 @@ class WikipediaException(Exception):
     pass
 
 
-def load_person_from_wikidata(wikidata_url):
+def load_person_from_wikidata_url(wikidata_url):
 
     # TODO: Description, multiple versions for different languages
     # TODO: og:title, og:description, og:image,
@@ -36,7 +38,7 @@ def load_person_from_wikidata(wikidata_url):
         return {}
 
 
-def load_person_from_wikidata(wikidata_url, language):
+def load_person_from_wikipedia_wikidata_url(wikidata_url, language):
     """Given a wikidata url, get information from wikipedia
     TODO: Allow a wikipedia URL as argument too
     TODO: Check language against valid list
@@ -64,12 +66,15 @@ def load_person_from_wikidata(wikidata_url, language):
         return {}
 
 
-def load_person_from_wikipedia(wikipedia_url, language):
+def load_person_from_wikipedia_url(wikipedia_url, language):
     """Given a wikipedia url, get information from wikipedia
     TODO: Check language against valid list
     TODO: Image from wikipedia is different to that of wikidata"""
+    try:
+        page = get_page_for_wikipedia(wikipedia_url)
+    except (DisambiguationError, PageError) as e:
+        return None
 
-    page = get_page_for_wikipedia(wikipedia_url)
     label = page.title
     description = page.summary
 
