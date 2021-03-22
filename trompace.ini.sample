@@ -1,0 +1,11 @@
+[server]
+host = http://localhost:4000
+
+[auth]
+id = local
+key = PZsG+oEW3K3QOoB5z0f30InzjXdBqM9LMtJa7BTg1xo=
+scopes = *
+
+[logging]
+# A python logging level (debug, info, warning, error)
+level = debug
