@@ -8,19 +8,21 @@ from trompace.connection import submit_query
 from trompace.mutations.audioobject import mutation_update_audioobject, mutation_create_audioobject, \
     mutation_merge_audioobject_exampleofwork
 from trompace.mutations.musiccomposition import mutation_update_music_composition, mutation_create_music_composition, \
-    mutation_merge_music_composition_composer
+    mutation_merge_music_composition_composer, mutation_merge_music_composition_recorded_as
 from trompace.mutations.person import mutation_update_person, mutation_create_person, \
     mutation_person_add_exact_match_person
 from trompace.mutations.musicgroup import mutation_create_musicgroup, \
-    mutation_update_musicgroup, mutation_delete_musicgroup, \
-    mutation_musicgroup_add_exact_match_musicgroup, mutation_add_musicgroup_member
+    mutation_update_musicgroup, \
+    mutation_musicgroup_add_exact_match_musicgroup, mutation_merge_musicgroup_member
+from trompace.mutations.musicrecording import mutation_create_musicrecording, \
+    mutation_update_musicrecording, mutation_merge_music_recording_audio
 
 from ceimport.sites.isni import load_person_from_isni
 # from ceimport.sites.musicbrainz import load_person_data_from_musicbrainz
 from ceimport.sites import musicbrainz
 from ceimport.sites.viaf import load_person_from_viaf
 from ceimport.sites.wikidata import load_person_from_wikidata_url, load_person_from_wikipedia_url
-from models import CE_AudioObject, CE_Person, CE_MusicComposition, CE_MusicGroup
+from models import CE_AudioObject, CE_Person, CE_MusicComposition, CE_MusicGroup, CE_MusicRecording
 from muziekweb_api import get_album_information, get_artist_information
 from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
 
@@ -34,10 +36,10 @@ async def import_tracks(key: str):
     """
     print(f"Retrieving release info with key {key} from Muziekweb")
     # Get data from Muziekweb
-    tracks, music_works, persons, music_groups = get_mw_audio_1track(key)
+    audio_objects, music_recordings, music_works, persons, music_groups = get_mw_audio_1track(key)
     # tracks = get_mw_audio(key)
 
-    if tracks is None or len(tracks) == 0:
+    if audio_objects is None or len(audio_objects) == 0:
         print(f"No track data received for {key}")
         return
 
@@ -61,6 +63,64 @@ async def import_tracks(key: str):
             work.identifier = response["data"]["CreateMusicComposition"]["identifier"]
 
     print(f"Importing music composition {work.identifier} done.\n")
+
+    #####################################
+    # MUSICRECORDING
+    # Loop the music recordings to create the CE_MusicRecording on the CE
+    #####################################
+    for recording in music_recordings:
+
+        recording.identifier = await lookupIdentifier("MusicRecording", recording.source)
+
+        if recording.identifier is not None:
+            print(f"Updating music recording {recording.identifier} in Trompa CE\n")
+
+            response = await ce.connection.submit_query_async(mutation_update_musicrecording(**recording.as_dict()))
+            recording.identifier = response["data"]["UpdateMusicRecording"]["identifier"]
+        else:
+            print("Inserting new recording {} in Trompa CE\n".format(recording.title))
+
+            response = await ce.connection.submit_query_async(mutation_create_musicrecording(**recording.as_dict()))
+            recording.identifier = response["data"]["CreateMusicRecording"]["identifier"]
+
+    print(f"Importing recordings {recording.identifier} done.\n")
+
+    #####################################
+    # AUDIOOBJECTS
+    # Loop the audio objects to create the CE_AudioObject on the CE
+    #####################################
+    for audio in audio_objects:
+
+        audio.identifier = await lookupIdentifier("AudioObject", audio.source)
+
+        if audio.identifier is not None:
+            print(f"Updating audio object {audio.identifier} in Trompa CE\n")
+
+            response = await ce.connection.submit_query_async(mutation_update_audioobject(**audio.as_dict()))
+            audio.identifier = response["data"]["UpdateAudioObject"]["identifier"]
+        else:
+            print("Inserting new audio {} in Trompa CE\n".format(audio.title))
+
+            response = await ce.connection.submit_query_async(mutation_create_audioobject(**audio.as_dict()))
+            audio.identifier = response["data"]["CreateAudioObject"]["identifier"]
+
+    print(f"Importing audio {audio.identifier} done.\n")
+
+    #####################################
+    # Linking MUSICCOMPOSITIONS and MUSICRECORDING
+    # Loop the musicworks identifiers and link them to audioobjects
+    #####################################
+    query = mutation_merge_music_composition_recorded_as(work.identifier, recording.identifier)
+    response = await ce.connection.submit_query_async(query)
+    print(f"   - Linking MusicComposition {work.identifier} to MusicRecording {recording.identifier} done.")
+
+    #####################################
+    # Linking MUSICRECORDING and AUDIOOBJECTS
+    # Loop the musicworks identifiers and link them to audioobjects
+    #####################################
+    query = mutation_merge_music_recording_audio(recording.identifier, audio.identifier)
+    response = await ce.connection.submit_query_async(query)
+    print(f"   - Linking MusicRecording {recording.identifier} to AudioObject {audio.identifier} done.")
 
     #####################################
     # PERSONS
@@ -157,38 +217,9 @@ async def import_tracks(key: str):
     #####################################
     for music_group_id in list_music_group_ids:
         for person_id in list_person_ids:
-            query = mutation_add_musicgroup_member(person_id, music_group_id)
+            query = mutation_merge_musicgroup_member(person_id, music_group_id)
             response = await ce.connection.submit_query_async(query)
             print(f"   - Linking Person {person_id} to MusicGroup {music_group_id} done.\n")
-
-    #####################################
-    # AUDIOOBJECTS
-    # Loop the tracks to create the CE_AudioObject on the CE
-    #####################################
-    for track in tracks:
-
-        track.identifier = await lookupIdentifier("AudioObject", track.source)
-
-        if track.identifier is not None:
-            print(f"Updating record {track.identifier} in Trompa CE\n")
-
-            response = await ce.connection.submit_query_async(mutation_update_audioobject(**track.as_dict()))
-            track.identifier = response["data"]["UpdateAudioObject"]["identifier"]
-        else:
-            print("Inserting new track {} in Trompa CE\n".format(track.title))
-
-            response = await ce.connection.submit_query_async(mutation_create_audioobject(**track.as_dict()))
-            track.identifier = response["data"]["CreateAudioObject"]["identifier"]
-
-    print(f"Importing tracks {track.identifier} done.\n")
-
-    #####################################
-    # Linking MUSICCOMPOSITIONS and AUDIOOBJECTS
-    # Loop the musicworks identifiers and link them to audioobjects
-    #####################################
-    query = mutation_merge_audioobject_exampleofwork(track.identifier, work.identifier)
-    response = await ce.connection.submit_query_async(query)
-    print(f"   - Linking MusicComposition {work.identifier} to AudioObject {track.identifier} done.")
 
 
 def get_mw_audio(key: str) -> [CE_AudioObject]:
@@ -233,6 +264,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
 
         # Now extract the audio links from the Muziekweb data
         audio_objects = list()
+        music_recordings = list()
         music_works = list()
         persons = list()
         music_groups = list()
@@ -242,10 +274,11 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
             trackId = track.getElementsByTagName('AlbumTrackID')[0].firstChild.data
 
             if trackId == key:
+                track_name = track.getElementsByTagName('TrackTitle')[0].firstChild.data
                 # append audio object
                 audio_object = CE_AudioObject(
                     identifier=None,
-                    name=track.getElementsByTagName('TrackTitle')[0].firstChild.data,
+                    name=track_name,
                     url=MW_AUDIO_URL.format(trackId),
                     contributor=GLOBAL_CONTRIBUTOR,
                     creator=GLOBAL_IMPORTER_REPO,
@@ -257,6 +290,21 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
 
                 audio_objects.append(audio_object)
 
+                # append music recording object
+                music_recording = CE_MusicRecording(
+                    identifier=None,
+                    name=track_name,
+                    url=MW_AUDIO_URL.format(trackId),
+                    contributor=GLOBAL_CONTRIBUTOR,
+                    creator=GLOBAL_IMPORTER_REPO,
+                )
+
+                music_recording.title = "Muziekweb - de muziekbibliotheek van Nederland"
+                music_recording.publisher = GLOBAL_PUBLISHER
+                music_recording.description = 'Embed in frame using the following code: <iframe width="300" height="30" src="[url]" frameborder="no" scrolling="no" allowtransparency="true"></iframe>'
+
+                music_recordings.append(music_recording)
+
                 # append musicwork
                 unif_title = track.getElementsByTagName('UniformTitle')[0].attributes['Link'].value
                 unif_text = track.getElementsByTagName('UniformTitle')[0].firstChild.data.replace(' ', '-')
@@ -264,7 +312,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
 
                 music_work = CE_MusicComposition(
                     identifier=None,
-                    name=track.getElementsByTagName('TrackTitle')[0].firstChild.data,
+                    name=track_name,
                     url=MW_MUSIC_URL.format(unif_title, unif_style, unif_text),
                     contributor=GLOBAL_CONTRIBUTOR,
                     creator=GLOBAL_IMPORTER_REPO,
@@ -294,7 +342,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                 elif artist_type == 'Group':
                     music_groups, persons = get_music_group_information(doc_artist, music_groups, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
 
-        return audio_objects, music_works, persons, music_groups
+        return audio_objects, music_recordings, music_works, persons, music_groups
 
     return None
 
