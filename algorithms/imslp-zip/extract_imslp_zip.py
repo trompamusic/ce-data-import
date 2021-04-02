@@ -18,7 +18,6 @@ def imslp_file_url_to_download_url(file_url):
     """Take a MediaWiki File: page (e.g. File:PMLP129863-HandAbO.zip)
     and use the mediawiki api to get the actual URL of the file"""
 
-    # TODO: This is the same as the method in cpdl.py and could be shared
     params = {"action": "query",
               "prop": "imageinfo",
               "titles": file_url,
@@ -49,8 +48,8 @@ def download_imslp_url(download_url):
 
 def extract_imslp_zip(mediaobject_id):
     # Get mediaobject from CE, check it's from imslp, and that it has no contentUrl
-    return_fields = ["name", "contributor", "url", "contentUrl"]
-    query = trompace.queries.mediaobject.query_mediaobject(identifier=mediaobject_id, return_items_list=return_fields)
+    return_items = ["name", "contributor", "url", "contentUrl"]
+    query = trompace.queries.mediaobject.query_mediaobject(identifier=mediaobject_id, return_items=return_items)
     resp = trompace.connection.submit_query(query)
     mediaobject = resp.get("data", {}).get("MediaObject", [])
     if mediaobject:
@@ -112,7 +111,7 @@ def extract_imslp_zip(mediaobject_id):
         contenturl=contenturl,
         encodingformat="application/vnd.recordare.musicxml+xml"
     )
-    trompace.connection.submit_query(query)
+    trompace.connection.submit_query(mutation, auth_required=True)
 
 
 @click.group()
