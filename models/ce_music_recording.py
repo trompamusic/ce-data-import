@@ -2,7 +2,6 @@
 """
 
 from dataclasses import dataclass
-from datetime import date
 
 from . import CE_BaseModel, CreativeWork
 
@@ -22,7 +21,6 @@ class CE_MusicRecording(CE_BaseModel, CreativeWork):
     def as_dict(self):
         d = {"title": self.title,
              "name": self.name,
-             "date": date.today(),
              "creator": self.creator,
              "contributor": self.contributor,
              "encodingformat": self.format,
