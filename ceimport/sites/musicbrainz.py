@@ -44,11 +44,10 @@ def load_group_from_musicbrainz(artist):
     """
     """
     artist_relations = artist.get('artist-relation-list', [])
-    members = []
+    # Add as first element the group entity itself
+    members = [load_person_from_musicbrainz(artist)]
     for relation in artist_relations:
-        if relation['type'] != 'member of band':
-            continue
-        else:
+        if relation['type-id'] == '5be4c609-9afa-4ea0-910b-12ffb71e3821':
             member = relation.get('artist', {})
             member = mb.get_artist_by_id(member['id'])['artist']
             mb_person = load_person_from_musicbrainz(member)
@@ -86,12 +85,14 @@ def load_person_from_musicbrainz(artist):
     born = died = None
     if lifespan:
         born = lifespan.get('begin')
+        # This check is for cases where date format from MusiBrainz
+        # is not correct
         if born:
-            if [x for x in born.split("-") if not x.isdigit()]:
+            if not all([False for x in born.split("-") if not x.isdigit()]):
                 born = None
         died = lifespan.get('end')
         if died:
-            if [x for x in died.split("-") if not x.isdigit()]:
+            if not all([False for x in died.split("-") if not x.isdigit()]):
                 died = None
 
     return {
@@ -104,8 +105,8 @@ def load_person_from_musicbrainz(artist):
         'language': 'en',
         'birth_date': born,
         'death_date': died,
-        'birth_place': birthplace,
-        'death_place': deathplace
+        'birthplace': birthplace,
+        'deathplace': deathplace
     }
 
 
