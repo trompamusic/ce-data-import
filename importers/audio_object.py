@@ -53,7 +53,6 @@ async def import_tracks(key: str):
 
         if work.identifier is not None:
             print(f"Updating work {work.identifier} in Trompa CE\n", end="")
-
             response = await ce.connection.submit_query_async(mutation_update_music_composition(**work.as_dict()))
             work.identifier = response["data"]["UpdateMusicComposition"]["identifier"]
         else:
@@ -337,14 +336,14 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                     artist = musicbrainz.get_artist_from_musicbrainz(mbid)
                     artist_type = artist['type']
 
-                if artist_type == 'Person' or not artist_type:
-                    persons = get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
-                elif artist_type == 'Group':
+                if artist_type == 'Group':
                     music_groups, persons = get_music_group_information(doc_artist, music_groups, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
+                else:
+                    persons = get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
 
         return audio_objects, music_recordings, music_works, persons, music_groups
 
-    return None
+    return None, None, None, None, None
 
 
 def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style):
@@ -405,9 +404,9 @@ def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_l
                     title=ppl['title'],
                     source=ppl['source'],
                 )
-                person.birthPlace = ppl['birth_place']
+                person.birthPlace = ppl['birthplace']
                 person.birthDate = ppl['birth_date']
-                person.deathPlace = ppl['death_place']
+                person.deathPlace = ppl['deathplace']
                 person.deathDate = ppl['death_date']
                 persons.append(person)
 
@@ -524,8 +523,18 @@ def get_music_group_information(doc_artist, music_groups, persons, num_ext_links
             mbid = ext_link.split('/')[-1]
 
             ppls = musicbrainz.load_artist_from_musicbrainz(mbid)
+            ppl = ppls[0]
+            music_group = CE_MusicGroup(
+                identifier=None,
+                name=ppl['title'],
+                url=ppl['source'],
+                contributor=ppl['contributor'],
+                creator=GLOBAL_IMPORTER_REPO,
+                title=ppl['title'],
+                source=ppl['source'],
+            )
 
-            for ppl in ppls:
+            for ppl in ppls[1:]:
                 person = CE_Person(
                     identifier=None,
                     name=ppl['title'],
@@ -535,9 +544,9 @@ def get_music_group_information(doc_artist, music_groups, persons, num_ext_links
                     title=ppl['title'],
                     source=ppl['source'],
                 )
-                person.birthPlace = ppl['birth_place']
+                person.birthPlace = ppl['birthplace']
                 person.birthDate = ppl['birth_date']
-                person.deathPlace = ppl['death_place']
+                person.deathPlace = ppl['deathplace']
                 person.deathDate = ppl['death_date']
                 persons.append(person)
 
