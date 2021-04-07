@@ -2,7 +2,6 @@
 """
 
 from dataclasses import dataclass
-from datetime import date
 
 from . import CE_BaseModel, AudioObject
 
@@ -22,12 +21,12 @@ class CE_AudioObject(CE_BaseModel, AudioObject):
     def as_dict(self):
         d = {"title": self.title,
              "description": self.description,
-             "date": date.today(),
              "creator": self.creator,
              "contributor": self.contributor,
              "format_": self.format,
              "encodingformat": self.format,
              "source": self.source,
+             "name": self.name,
              "subject": self.name,
              "contenturl": self.contentUrl,
              "language": self.language
