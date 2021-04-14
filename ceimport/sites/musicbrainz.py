@@ -15,7 +15,7 @@ VIAF_REL = 'e8571dcc-35d4-4e91-a577-a3382fd84460'
 WIKIDATA_REL = '689870a4-a1e4-4912-b17f-7b2664215698'
 IMSLP_REL = '8147b6a2-ad14-4ce7-8f0a-697f9a31f68f'
 
-# Indicates that an artist was the composer of a work
+# Indicates that an artist gwas the composer of a work
 COMPOSER_REL = 'd59d99ea-23d4-4a80-b066-edca32ee158f'
 # Indicates that a work is a subpart of another work
 PARTS_REL = 'ca8d3642-ce5f-49f8-91f2-125d72524e6a'
@@ -33,10 +33,12 @@ def load_artist_from_musicbrainz(artist_mbid):
     """
     """
     artist = get_artist_from_musicbrainz(artist_mbid)
-    if artist['type'] == 'Person':
-        artists = [load_person_from_musicbrainz(artist)]
-    elif artist['type'] == 'Group':
+    artist_type = artist.get('type', None)
+    if artist_type == 'Group':
         artists = load_group_from_musicbrainz(artist)
+    else:
+        artists = [load_person_from_musicbrainz(artist)]
+
     return artists
 
 

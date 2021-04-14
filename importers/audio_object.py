@@ -334,7 +334,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                     ext_link = doc_artist.getElementsByTagName('ExternalLinks')[0].getElementsByTagName('Link')[prov_names.index('MUSICBRAINZ')].firstChild.data
                     mbid = ext_link.split('/')[-1]
                     artist = musicbrainz.get_artist_from_musicbrainz(mbid)
-                    artist_type = artist['type']
+                    artist_type = artist.get('type', None)
 
                 if artist_type == 'Group':
                     music_groups, persons = get_music_group_information(doc_artist, music_groups, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
