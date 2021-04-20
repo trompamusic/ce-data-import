@@ -544,7 +544,6 @@ def import_cpdl_works_for_category(cpdl_category):
     wikitext = cpdl.get_wikitext_for_titles(titles)
     xmlwikitext = cpdl.get_works_with_xml(wikitext)
 
-    xmlwikitext = xmlwikitext[-4000:]
     total = len(xmlwikitext)
     for i, work in enumerate(xmlwikitext, 1):
         logger.info("Importing CPDL work %s/%s %s", i, total, work['title'])
