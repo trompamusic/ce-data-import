@@ -97,6 +97,23 @@ def imslp_file_url_to_download_url(file_url):
                 return "https:" + info[0]["url"]
 
 
+def get_file_in_imslp_archive(download_url, arcpurl):
+    """Given a download url for imslp (from `imslp_file_url_to_download_url`), download
+    the zip at the location, and uncompress the file defined by arcpurl"""
+    # TODO: Doesn't check the hash of arcpurl
+    cookie = {"imslpdisclaimeraccepted": "yes"}
+    r = requests.get(download_url, cookies=cookie)
+    zipfp = io.BytesIO(r.content)
+    filename = os.path.basename(arcpurl)
+    try:
+        with zipfile.ZipFile(zipfp, "r") as zip:
+            with zip.open(filename, "r") as fp:
+                return fp.read().decode("utf-8")
+    except zipfile.BadZipFile:
+        print("Contents doesn't appear to be a zip file")
+        return
+
+
 def uncompress_mxl_to_xml(mxl_file):
     """an mxl is a zip file that contains a manifest and the actual xml file."""
     with zipfile.ZipFile(mxl_file) as zipfp:
@@ -146,8 +163,25 @@ def upload_mei_to_s3(meidata, filename):
     return urlunparse(host_parsed)
 
 
-def find_existing_mei(expected_filename):
-    pass
+def create_blank_mei_node():
+    """Create a MediaObject that we want to use to store an MEI file, but
+    don't add any content to it. This is so that we can get the identifier to name the file
+    in the local filesystem."""
+    imslp_mei = mediaobject.mutation_create_media_object(
+        creator="https://github.com/trompamusic/ce-data-import/tree/master/algorithms/mxml-to-mei",
+        # Who this data came from
+        contributor="https://trompamusic.eu",
+        # These values must be set, but we'll update them later in update_mei_node
+        title="",
+        source="",
+        format_="/"
+    )
+    mei_response = submit_query(imslp_mei, auth_required=True)
+    mei = mei_response.get('data', {}).get('CreateMediaObject', {})
+    if mei:
+        return mei["identifier"]
+    else:
+        return None
 
 
 def create_mei_node(meiurl):
@@ -177,16 +211,37 @@ def create_mei_node(meiurl):
         return None
 
 
+def update_mei_node(mei_id, meiurl):
+    filename = os.path.basename(meiurl)
+
+    """Given an MEI MediaObject node id, update it to add the URL """
+    imslp_mei = mediaobject.mutation_update_media_object(
+        identifier=mei_id,
+        # URL on the web that matches contentUrl
+        source=meiurl,
+        # The <title> of `source`
+        title=filename,
+        # The mimetype of `source`
+        format_="application/mei+xml",
+        name=filename,
+        # The page that describes the resource
+        url=meiurl,
+        contenturl=meiurl,
+        encodingformat="application/mei+xml"
+    )
+    mei_response = submit_query(imslp_mei, auth_required=True)
+    mei = mei_response.get('data', {}).get('UpdateMediaObject', {})
+    if mei:
+        return mei["identifier"]
+    else:
+        return None
+
+
 def join_existing_and_new_mei(musiccomposition_id, mxml_mo_id, mei_mo_id):
     """
-    # All of the MediaObjects are examples of the MusicComposition
-    example_of_work_pdf = mediaobject.mutation_merge_mediaobject_example_of_work(pdf_id, work_identifier=work_id)
-    # In the case of CPDL, we know that scores are written in an editor and then rendered to PDF.
-    # Therefore, the PDF wasDerivedFrom the xml (http://www.w3.org/ns/prov#wasDerivedFrom)
-    pdf_derived_from_xml = mediaobject.mutation_merge_media_object_wasderivedfrom(pdf_id, xml_id)
-
-    application created by:
-    mutation_add_actioninterface_result
+    Indicate that the MEI is an exampleOfWork of the composition
+    That the MEI wasDerivedFrom the MXML
+    That the MEI used verovio to create it
     """
 
     application_id = get_or_create_verovio_application()
@@ -198,35 +253,61 @@ def join_existing_and_new_mei(musiccomposition_id, mxml_mo_id, mei_mo_id):
     submit_query(used_mutation, auth_required=True)
 
 
-def process_cpdl(file_url):
-    r = requests.get(file_url)
-    file_content = io.BytesIO(r.content)
-    mei_content = convert_mxml_to_mei_file(file_content, file_url)
+def mei_for_xml_exists(mediaobject_id):
+    mo_query = query_mediaobject(
+        filter_={"wasDerivedFrom": {"identifier": mediaobject_id}, "format": "application/mei+xml"})
+    mo_response = submit_query(mo_query)
+    mo = mo_response.get('data', {}).get('MediaObject', [])
+    if mo:
+        return True
+    else:
+        return False
 
-    parsed = urlparse(file_url)
-    original_name = os.path.basename(parsed.path)
-    original_parts = os.path.split(original_name)
-    mei_filename = original_parts[0] + ".mei"
+
+def process_cpdl(mediaobject):
+    mo_contenturl = mediaobject['contentUrl']
+
+    mei_mo_id = create_blank_mei_node()
+    mei_filename = mei_mo_id + ".mei"
+
+    r = requests.get(mo_contenturl)
+    file_content = io.BytesIO(r.content)
+    mei_content = convert_mxml_to_mei_file(file_content, mo_contenturl)
 
     mei_fp = io.BytesIO(mei_content.encode("utf-8"))
     mei_url = upload_mei_to_s3(mei_fp, mei_filename)
-    mei_id = create_mei_node(mei_url)
 
-    return mei_id
+    update_mei_node(mei_mo_id, mei_url)
 
-
-def find_imslp_download_url(imslp_file):
-    cookie = {"imslpdisclaimeraccepted": "yes"}
-    r = requests.get(download_url, cookies=cookie)
-    zipfp = io.BytesIO(r.content)
+    return mei_mo_id
 
 
-def convert_ce_node(mediaobject_id, temporary_dir):
+def process_imslp(mediaobject):
+    mo_contenturl = mediaobject['contentUrl']
+    mei_mo_id = create_blank_mei_node()
+    mei_filename = mei_mo_id + ".mei"
+
+    download_url = imslp_file_url_to_download_url(mediaobject['name'])
+    mxml_file = get_file_in_imslp_archive(download_url, mo_contenturl)
+    mei_content = convert_mxml_to_mei_file(mxml_file, mo_contenturl)
+
+    mei_fp = io.BytesIO(mei_content.encode("utf-8"))
+    mei_url = upload_mei_to_s3(mei_fp, mei_filename)
+    update_mei_node(mei_mo_id, mei_url)
+
+    return mei_mo_id
+
+
+def convert_ce_node(mediaobject_id):
     """Take a MediaObject
     Ensure that encodingFormat is one of the musicxml ones
     - if the contenturl is a content url, then find it (special-case imslp), otherwise just download it
     - do conversion
     - create mediaobject, link to input file, link to composition, upload to s3"""
+
+    if mei_for_xml_exists(mediaobject_id):
+        print("An MEI file derived from this MusicXML already exists", file=sys.stderr)
+        return
 
     return_items = ["identifier", "name", "contributor", "url", "contentUrl", {"exampleOfWork": ["identifier"]}]
     mo_query = query_mediaobject(identifier=mediaobject_id, return_items=return_items)
@@ -234,23 +315,28 @@ def convert_ce_node(mediaobject_id, temporary_dir):
     mo = mo_response.get('data', {}).get('MediaObject', [])
     if mo:
         mo = mo[0]
+        print("got mediaobject", mo)
         mo_id = mo['identifier']
         mo_contributor = mo['contributor']
-        mo_contenturl = mo['contentUrl']
-        mo_url = mo['url']
         work = mo['exampleOfWork']
         if not work:
             print('Unexpectedly this MediaObject has no exampleOfWork', file=sys.stderr)
+            return
         work_id = work[0]['identifier']
 
         if mo_contributor == "https://cpdl.org":
-            mei_id = process_cpdl(mo_contenturl)
+            print("cpdl")
+            mei_id = process_cpdl(mo)
         elif mo_contributor == "https://imslp.org":
-            mei_id = process_imslp(mo_url, temporary_dir)
+            print("imslp")
+            mei_id = process_imslp(mo)
         else:
             print("Contributor isn't one of cpdl or imslp", file=sys.stderr)
             return
         join_existing_and_new_mei(musiccomposition_id=work_id, mxml_mo_id=mo_id, mei_mo_id=mei_id)
+    else:
+        print("Cannot find a MediaObject", file=sys.stderr)
+        return
 
 
 @click.group()
@@ -262,8 +348,7 @@ def cli():
 @click.argument("mediaobject_id")
 def convert_mxml_to_mei_node_command(mediaobject_id):
     """0c297551-6a77-47a5-aa18-b8b114d64691"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        convert_ce_node(mediaobject_id, tmpdir)
+    convert_ce_node(mediaobject_id)
 
 
 @cli.command("convert-mxml-to-mei-file")
