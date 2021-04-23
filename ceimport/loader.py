@@ -526,9 +526,9 @@ def import_cpdl_work_wikitext(work_wikitext):
             logger.info(" - missing composer?")
 
 
-def import_cpdl_work(work_name):
+def import_cpdl_work(work_names):
     """Import a single work"""
-    wikitext = cpdl.get_wikitext_for_titles([work_name])
+    wikitext = cpdl.get_wikitext_for_titles(work_names)
     for work in wikitext:
         logger.info("Importing CPDL work %s", work['title'])
         import_cpdl_work_wikitext(work)

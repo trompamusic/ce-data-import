@@ -210,7 +210,9 @@ def composition_wikitext_to_mediaobjects(wikitext):
         if "pdf" in f and f["pdf"]:
             file_names.append(f["pdf"])
 
-    file_urls = get_fileurl_from_media(file_names)
+    file_urls = {}
+    for items in chunks(file_names, 50):
+        file_urls.update(get_fileurl_from_media(items))
     ret = []
 
     for f in files:

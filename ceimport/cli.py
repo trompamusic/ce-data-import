@@ -31,10 +31,21 @@ def cpdl_import_composer(composer_name):
 
 
 @cli.command()
-@click.argument('work_name')
-def cpdl_import_work(work_name):
-    """Import the given work"""
-    loader.import_cpdl_work(work_name)
+@click.option('--file')
+@click.option('--url')
+def cpdl_import_work(file, url):
+    """Import the given work (--url x) or file of works (--file f).
+    Works need to be wiki titles (no http://.... and no _ to split words."""
+    if url:
+        loader.import_cpdl_work([url])
+    elif file:
+        works = []
+        with open(file, 'r') as fp:
+            for work in fp:
+                works.append(work.strip())
+        loader.import_cpdl_work(works)
+    else:
+        click.echo("Need to provide --url or --file")
 
 
 @cli.command()
