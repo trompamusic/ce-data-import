@@ -1,4 +1,4 @@
 requests==2.25.1
-trompace-client
-verovio==3.2.0
+git+git://github.com/trompamusic/trompa-ce-client.git#egg=trompace-client
 boto3==1.17.28
+click

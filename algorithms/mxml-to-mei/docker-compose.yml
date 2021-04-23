@@ -1,0 +1,35 @@
+version: '3.3'
+volumes:
+  home:
+  minio:
+services:
+  converter:
+    build: .
+    volumes:
+      - .:/code
+      - home:/root
+    networks:
+      - ce-api_default
+    depends_on:
+      - minio
+    environment:
+      - S3_ACCESS_KEY=minio
+      - S3_SECRET_KEY=minio123
+      - S3_HOST=http://minio:9000
+      - TROMPACE_CLIENT_CONFIG=trompace.ini
+  minio:
+    image: minio/minio:RELEASE.2021-02-23T20-05-01Z
+    command: server /data
+    ports:
+      - "9000:9000"
+    volumes:
+      - minio:/data
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    networks:
+      - ce-api_default
+
+networks:
+  ce-api_default:
+    external: true

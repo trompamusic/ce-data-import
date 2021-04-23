@@ -14,15 +14,16 @@ TODO: Duplicate imslp access methods in other algorithms. Can these be factored 
 
 import io
 import os
+import subprocess
 import sys
 import tempfile
 import zipfile
+from typing import Tuple
 from urllib.parse import urlparse, urlunparse
 
 import boto3
 import click
 import requests
-import verovio
 from trompace.config import config
 from trompace.connection import submit_query
 from trompace.mutations import mediaobject
@@ -41,11 +42,56 @@ S3_BUCKET = 'meiconversion'
 S3_POLICY = '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::meiconversion"]},{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::meiconversion/*"]}]}'
 
 
+class FailedToConvertXml(Exception):
+    pass
+
+
+def get_or_create_musescore_application():
+    creator = "https://github.com/trompamusic/ce-data-import/tree/master/algorithms/mxml-to-mei"
+    source = "https://musescore.org"
+
+    run = subprocess.run(
+        ['mscore3', '-v', '-platform', 'offscreen'],
+        env={'XDG_RUNTIME_DIR': '/tmp'},
+        check=True,
+        capture_output=True
+    )
+    version = str(run.stdout, "utf-8").strip()
+
+    query_application = queries_application.query_softwareapplication(
+        creator=creator,
+        source=source,
+        softwareversion=version
+    )
+    app_response = submit_query(query_application, auth_required=True)
+    app = app_response.get('data', {}).get('SoftwareApplication', [])
+    if app:
+        return app[0]["identifier"]
+    else:
+        mutation_create = mutations_application.mutation_create_application(
+            name="Musescore",
+            contributor=source,
+            creator=creator,
+            source=source,
+            language="en",
+            title="Musescore",
+            softwareversion=version
+        )
+        create_response = submit_query(mutation_create, auth_required=True)
+        app = create_response.get('data', {}).get('CreateSoftwareApplication', {})
+        return app["identifier"]
+
+
 def get_or_create_verovio_application():
-    tk = verovio.toolkit()
-    version = tk.getVersion()
     creator = "https://github.com/trompamusic/ce-data-import/tree/master/algorithms/mxml-to-mei"
     source = "https://www.verovio.org"
+
+    run = subprocess.run(
+        ['verovio', '-v'],
+        check=True,
+        capture_output=True
+    )
+    version = str(run.stdout, "utf-8").strip()
 
     query_application = queries_application.query_softwareapplication(
         creator=creator,
@@ -59,7 +105,7 @@ def get_or_create_verovio_application():
     else:
         mutation_create = mutations_application.mutation_create_application(
             name="Verovio",
-            contributor="https://www.verovio.org",
+            contributor=source,
             creator=creator,
             source=source,
             language="en",
@@ -127,18 +173,54 @@ def uncompress_mxl_to_xml(mxl_file):
             return zipfp.read(xmlnames[0]).decode("utf-8")
 
 
-def convert_mxml_to_mei_file(inputdata, inputname):
-    # TODO: If it's compressed, need to undo it (current version of verovio doesn't support mxl)
-
+def convert_mxml_to_mei_file(inputdata, inputname) -> Tuple[str, bool]:
+    """
+    returns a tuple  meidata, used_musescore
+    used_musescore is True if it had to convert with musescore first
+    """
     if inputname.endswith(".mxl"):
         data = uncompress_mxl_to_xml(inputdata)
     else:
         data = inputdata
 
-    tk = verovio.toolkit()
-    tk.loadData(data)
-    mei = tk.getMEI('')
-    return mei
+    with tempfile.TemporaryDirectory() as tmpdir:
+        outputname = os.path.join(tmpdir, "output.mei")
+        inputname = os.path.join(tmpdir, "input.xml")
+        with open(inputname, "w") as fp:
+            fp.write(data)
+        try:
+            return run_mxml_to_mei_verovio(inputname, outputname), False
+        except subprocess.CalledProcessError:
+            # Vervio failed to run, for example it could have segfaulted! In this case, convert
+            # the file using musescore, from mxml to mxml and try again
+            print("failed to convert with verovio, trying again")
+            try:
+                new_mxml = run_mxml_to_mxml_musescore(inputname, tmpdir)
+                return run_mxml_to_mei_verovio(new_mxml, outputname), True
+            except subprocess.CalledProcessError as e:
+                print(e)
+                # Still got a problem... give up
+                raise FailedToConvertXml(e)
+
+
+def run_mxml_to_mei_verovio(inputname, outputname):
+    run = subprocess.run(
+        ['verovio', '-a', '-f', 'xml', '-t', 'mei', '-o', outputname, inputname],
+        check=True,
+        capture_output=True
+    )
+    return open(outputname).read()
+
+
+def run_mxml_to_mxml_musescore(inputname, tmpdir):
+    musescore_output = os.path.join(tmpdir, "musescore_output.musicxml")
+    run = subprocess.run(
+        ['mscore3', inputname, '-o', musescore_output, '-platform', 'offscreen'],
+        check=True,
+        capture_output=True,
+        env={'XDG_RUNTIME_DIR': '/tmp'}
+    )
+    return musescore_output
 
 
 def upload_mei_to_s3(meidata, filename):
@@ -237,7 +319,7 @@ def update_mei_node(mei_id, meiurl):
         return None
 
 
-def join_existing_and_new_mei(musiccomposition_id, mxml_mo_id, mei_mo_id):
+def join_existing_and_new_mei(musiccomposition_id, mxml_mo_id, mei_mo_id, used_musescore: bool):
     """
     Indicate that the MEI is an exampleOfWork of the composition
     That the MEI wasDerivedFrom the MXML
@@ -251,6 +333,10 @@ def join_existing_and_new_mei(musiccomposition_id, mxml_mo_id, mei_mo_id):
     submit_query(derivedfrom_mutation, auth_required=True)
     used_mutation = mediaobject.mutation_add_media_object_used(mei_mo_id, application_id)
     submit_query(used_mutation, auth_required=True)
+    if used_musescore:
+        musescore_application_id = get_or_create_musescore_application()
+        used_mutation = mediaobject.mutation_add_media_object_used(mei_mo_id, musescore_application_id)
+        submit_query(used_mutation, auth_required=True)
 
 
 def mei_for_xml_exists(mediaobject_id):
@@ -272,14 +358,18 @@ def process_cpdl(mediaobject):
 
     r = requests.get(mo_contenturl)
     file_content = io.BytesIO(r.content)
-    mei_content = convert_mxml_to_mei_file(file_content, mo_contenturl)
 
-    mei_fp = io.BytesIO(mei_content.encode("utf-8"))
-    mei_url = upload_mei_to_s3(mei_fp, mei_filename)
+    try:
+        mei_content, used_musescore = convert_mxml_to_mei_file(file_content, mo_contenturl)
 
-    update_mei_node(mei_mo_id, mei_url)
+        mei_fp = io.BytesIO(mei_content.encode("utf-8"))
+        mei_url = upload_mei_to_s3(mei_fp, mei_filename)
 
-    return mei_mo_id
+        update_mei_node(mei_mo_id, mei_url)
+
+        return mei_mo_id, used_musescore
+    except FailedToConvertXml:
+        pass
 
 
 def process_imslp(mediaobject):
@@ -289,13 +379,17 @@ def process_imslp(mediaobject):
 
     download_url = imslp_file_url_to_download_url(mediaobject['name'])
     mxml_file = get_file_in_imslp_archive(download_url, mo_contenturl)
-    mei_content = convert_mxml_to_mei_file(mxml_file, mo_contenturl)
 
-    mei_fp = io.BytesIO(mei_content.encode("utf-8"))
-    mei_url = upload_mei_to_s3(mei_fp, mei_filename)
-    update_mei_node(mei_mo_id, mei_url)
+    try:
+        mei_content, used_musescore = convert_mxml_to_mei_file(mxml_file, mo_contenturl)
 
-    return mei_mo_id
+        mei_fp = io.BytesIO(mei_content.encode("utf-8"))
+        mei_url = upload_mei_to_s3(mei_fp, mei_filename)
+        update_mei_node(mei_mo_id, mei_url)
+
+        return mei_mo_id, used_musescore
+    except FailedToConvertXml:
+        pass
 
 
 def convert_ce_node(mediaobject_id):
@@ -315,7 +409,6 @@ def convert_ce_node(mediaobject_id):
     mo = mo_response.get('data', {}).get('MediaObject', [])
     if mo:
         mo = mo[0]
-        print("got mediaobject", mo)
         mo_id = mo['identifier']
         mo_contributor = mo['contributor']
         work = mo['exampleOfWork']
@@ -325,15 +418,15 @@ def convert_ce_node(mediaobject_id):
         work_id = work[0]['identifier']
 
         if mo_contributor == "https://cpdl.org":
-            print("cpdl")
-            mei_id = process_cpdl(mo)
+            mei_id, used_musescore = process_cpdl(mo)
         elif mo_contributor == "https://imslp.org":
-            print("imslp")
-            mei_id = process_imslp(mo)
+            mei_id, used_musescore = process_imslp(mo)
         else:
             print("Contributor isn't one of cpdl or imslp", file=sys.stderr)
             return
-        join_existing_and_new_mei(musiccomposition_id=work_id, mxml_mo_id=mo_id, mei_mo_id=mei_id)
+        join_existing_and_new_mei(musiccomposition_id=work_id,
+                                  mxml_mo_id=mo_id, mei_mo_id=mei_id,
+                                  used_musescore=used_musescore)
     else:
         print("Cannot find a MediaObject", file=sys.stderr)
         return

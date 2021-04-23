@@ -1,10 +1,25 @@
-FROM python:3.9
+FROM mtgupf/verovio:2021-04-23 as verovio
+
+FROM ubuntu:20.04
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       musescore3 \
+       xvfb \
+       python3 \
+       python3-pip \
+       git \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=verovio /usr/local/bin/verovio /usr/local/bin/verovio
+COPY --from=verovio /usr/local/share/verovio /usr/local/share/verovio
 
 RUN mkdir /code
 WORKDIR /code
 
 COPY requirements.txt /code
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir ipython 'jedi<0.18'
 
 COPY . /code
 
