@@ -178,25 +178,43 @@ def convert_mxml_to_mei_file(inputdata, inputname) -> Tuple[str, bool]:
     returns a tuple  meidata, used_musescore
     used_musescore is True if it had to convert with musescore first
     """
-    if inputname.endswith(".mxl"):
-        data = uncompress_mxl_to_xml(inputdata)
-    else:
-        data = inputdata
-
+    used_musescore = False
     with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            if inputname.endswith(".mxl"):
+                data = uncompress_mxl_to_xml(inputdata)
+            else:
+                data = inputdata
+        except ValueError as e:
+            # We were unable to find a single file ending in .xml inside this archive,
+            # it could end in .musicxml, or it could be a partwise zip which contains many parts.
+            # give up and use musescore to convert it! A bit hacky because then we read the data again
+            print("Can't find file in compressed archive, using musescore")
+            try:
+                tmp_mxml_name = os.path.join(tmpdir, os.path.basename(inputname))
+                with open(tmp_mxml_name, "wb") as fp:
+                    inputdata.seek(0)
+                    fp.write(inputdata.read())
+                new_mxml_name = run_mxml_to_mxml_musescore(tmp_mxml_name, tmpdir)
+                data = open(new_mxml_name).read()
+                used_musescore = True
+            except subprocess.CalledProcessError as spe:
+                print(spe.stderr)
+                raise e
+
         outputname = os.path.join(tmpdir, "output.mei")
         inputname = os.path.join(tmpdir, "input.xml")
         with open(inputname, "w") as fp:
             fp.write(data)
         try:
-            return run_mxml_to_mei_verovio(inputname, outputname), False
+            return run_mxml_to_mei_verovio(inputname, outputname), used_musescore or False
         except subprocess.CalledProcessError:
             # Vervio failed to run, for example it could have segfaulted! In this case, convert
             # the file using musescore, from mxml to mxml and try again
             print("failed to convert with verovio, trying again")
             try:
                 new_mxml = run_mxml_to_mxml_musescore(inputname, tmpdir)
-                return run_mxml_to_mei_verovio(new_mxml, outputname), True
+                return run_mxml_to_mei_verovio(new_mxml, outputname), used_musescore or True
             except subprocess.CalledProcessError as e:
                 print(e)
                 # Still got a problem... give up
@@ -369,7 +387,7 @@ def process_cpdl(mediaobject):
 
         return mei_mo_id, used_musescore
     except FailedToConvertXml:
-        pass
+        return None, False
 
 
 def process_imslp(mediaobject):
@@ -389,7 +407,7 @@ def process_imslp(mediaobject):
 
         return mei_mo_id, used_musescore
     except FailedToConvertXml:
-        pass
+        return None, False
 
 
 def convert_ce_node(mediaobject_id):
@@ -424,9 +442,12 @@ def convert_ce_node(mediaobject_id):
         else:
             print("Contributor isn't one of cpdl or imslp", file=sys.stderr)
             return
-        join_existing_and_new_mei(musiccomposition_id=work_id,
-                                  mxml_mo_id=mo_id, mei_mo_id=mei_id,
-                                  used_musescore=used_musescore)
+        if mei_id:
+            join_existing_and_new_mei(musiccomposition_id=work_id,
+                                      mxml_mo_id=mo_id, mei_mo_id=mei_id,
+                                      used_musescore=used_musescore)
+        else:
+            print("Failed to convert file", file=sys.stderr)
     else:
         print("Cannot find a MediaObject", file=sys.stderr)
         return
