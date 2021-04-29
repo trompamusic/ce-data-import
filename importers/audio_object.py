@@ -8,15 +8,21 @@ from trompace.connection import submit_query
 from trompace.mutations.audioobject import mutation_update_audioobject, mutation_create_audioobject, \
     mutation_merge_audioobject_exampleofwork
 from trompace.mutations.musiccomposition import mutation_update_music_composition, mutation_create_music_composition, \
-    mutation_merge_music_composition_composer
+    mutation_merge_music_composition_composer, mutation_merge_music_composition_recorded_as
 from trompace.mutations.person import mutation_update_person, mutation_create_person, \
     mutation_person_add_exact_match_person
+from trompace.mutations.musicgroup import mutation_create_musicgroup, \
+    mutation_update_musicgroup, \
+    mutation_musicgroup_add_exact_match_musicgroup, mutation_merge_musicgroup_member
+from trompace.mutations.musicrecording import mutation_create_musicrecording, \
+    mutation_update_musicrecording, mutation_merge_music_recording_audio
 
 from ceimport.sites.isni import load_person_from_isni
-from ceimport.sites.musicbrainz import load_person_from_musicbrainz
+# from ceimport.sites.musicbrainz import load_person_data_from_musicbrainz
+from ceimport.sites import musicbrainz
 from ceimport.sites.viaf import load_person_from_viaf
-from ceimport.sites.wikidata import load_person_from_wikidata, load_person_from_wikipedia
-from models import CE_AudioObject, CE_Person, CE_MusicComposition
+from ceimport.sites.wikidata import load_person_from_wikidata_url, load_person_from_wikipedia_url
+from models import CE_AudioObject, CE_Person, CE_MusicComposition, CE_MusicGroup, CE_MusicRecording
 from muziekweb_api import get_album_information, get_artist_information
 from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
 
@@ -30,12 +36,90 @@ async def import_tracks(key: str):
     """
     print(f"Retrieving release info with key {key} from Muziekweb")
     # Get data from Muziekweb
-    tracks, music_works, persons = get_mw_audio_1track(key)
+    audio_objects, music_recordings, music_works, persons, music_groups = get_mw_audio_1track(key)
     # tracks = get_mw_audio(key)
 
-    if tracks is None or len(tracks) == 0:
+    if audio_objects is None or len(audio_objects) == 0:
         print(f"No track data received for {key}")
         return
+
+    #####################################
+    # MUSICCOMPOSITION
+    # Loop the music works to create the CE_MusicComposition on the CE
+    #####################################
+    for work in music_works:
+
+        work.identifier = await lookupIdentifier("MusicComposition", work.source)
+
+        if work.identifier is not None:
+            print(f"Updating work {work.identifier} in Trompa CE\n", end="")
+            response = await ce.connection.submit_query_async(mutation_update_music_composition(**work.as_dict()))
+            work.identifier = response["data"]["UpdateMusicComposition"]["identifier"]
+        else:
+            print("Inserting new work {} in Trompa CE\n".format(work.name))
+
+            response = await ce.connection.submit_query_async(mutation_create_music_composition(**work.as_dict()))
+            work.identifier = response["data"]["CreateMusicComposition"]["identifier"]
+
+    print(f"Importing music composition {work.identifier} done.\n")
+
+    #####################################
+    # MUSICRECORDING
+    # Loop the music recordings to create the CE_MusicRecording on the CE
+    #####################################
+    for recording in music_recordings:
+
+        recording.identifier = await lookupIdentifier("MusicRecording", recording.source)
+
+        if recording.identifier is not None:
+            print(f"Updating music recording {recording.identifier} in Trompa CE\n")
+
+            response = await ce.connection.submit_query_async(mutation_update_musicrecording(**recording.as_dict()))
+            recording.identifier = response["data"]["UpdateMusicRecording"]["identifier"]
+        else:
+            print("Inserting new recording {} in Trompa CE\n".format(recording.title))
+
+            response = await ce.connection.submit_query_async(mutation_create_musicrecording(**recording.as_dict()))
+            recording.identifier = response["data"]["CreateMusicRecording"]["identifier"]
+
+    print(f"Importing recordings {recording.identifier} done.\n")
+
+    #####################################
+    # AUDIOOBJECTS
+    # Loop the audio objects to create the CE_AudioObject on the CE
+    #####################################
+    for audio in audio_objects:
+
+        audio.identifier = await lookupIdentifier("AudioObject", audio.source)
+
+        if audio.identifier is not None:
+            print(f"Updating audio object {audio.identifier} in Trompa CE\n")
+
+            response = await ce.connection.submit_query_async(mutation_update_audioobject(**audio.as_dict()))
+            audio.identifier = response["data"]["UpdateAudioObject"]["identifier"]
+        else:
+            print("Inserting new audio {} in Trompa CE\n".format(audio.title))
+
+            response = await ce.connection.submit_query_async(mutation_create_audioobject(**audio.as_dict()))
+            audio.identifier = response["data"]["CreateAudioObject"]["identifier"]
+
+    print(f"Importing audio {audio.identifier} done.\n")
+
+    #####################################
+    # Linking MUSICCOMPOSITIONS and MUSICRECORDING
+    # Loop the musicworks identifiers and link them to audioobjects
+    #####################################
+    query = mutation_merge_music_composition_recorded_as(work.identifier, recording.identifier)
+    response = await ce.connection.submit_query_async(query)
+    print(f"   - Linking MusicComposition {work.identifier} to MusicRecording {recording.identifier} done.")
+
+    #####################################
+    # Linking MUSICRECORDING and AUDIOOBJECTS
+    # Loop the musicworks identifiers and link them to audioobjects
+    #####################################
+    query = mutation_merge_music_recording_audio(recording.identifier, audio.identifier)
+    response = await ce.connection.submit_query_async(query)
+    print(f"   - Linking MusicRecording {recording.identifier} to AudioObject {audio.identifier} done.")
 
     #####################################
     # PERSONS
@@ -60,37 +144,18 @@ async def import_tracks(key: str):
             person.identifier = response["data"]["CreatePerson"]["identifier"]
             list_person_ids.append(person.identifier)
 
-    print(f"Importing Persons for {key} done.")
+    if list_person_ids:
+        print(f"Importing Persons for {key} done.")
 
     #####################################
     # Linking PERSONS
     # Loop the person identifiers and link them
     #####################################
-    for from_id, to_id in itertools.permutations(list_person_ids, 2):
-        query = mutation_person_add_exact_match_person(from_id, to_id)
-        response = await ce.connection.submit_query_async(query)
-        print(f"   - Linking Person {from_id} to Person {to_id} done.")
-
-    #####################################
-    # MUSICCOMPOSITION
-    # Loop the music works to create the CE_MusicComposition on the CE
-    #####################################
-    for work in music_works:
-
-        work.identifier = await lookupIdentifier("MusicComposition", work.source)
-
-        if work.identifier is not None:
-            print(f"Updating work {work.identifier} in Trompa CE\n", end="")
-
-            response = await ce.connection.submit_query_async(mutation_update_music_composition(**work.as_dict()))
-            work.identifier = response["data"]["UpdateMusicComposition"]["identifier"]
-        else:
-            print("Inserting new work {} in Trompa CE\n".format(work.name))
-
-            response = await ce.connection.submit_query_async(mutation_create_music_composition(**work.as_dict()))
-            work.identifier = response["data"]["CreateMusicComposition"]["identifier"]
-
-    print(f"Importing music composition {work.identifier} done.\n")
+    if not music_groups:
+        for from_id, to_id in itertools.permutations(list_person_ids, 2):
+            query = mutation_person_add_exact_match_person(from_id, to_id)
+            response = await ce.connection.submit_query_async(query)
+            print(f"   - Linking Person {from_id} to Person {to_id} done.")
 
     #####################################
     # Linking PERSONS and MUSICCOMPOSITIONS
@@ -102,33 +167,58 @@ async def import_tracks(key: str):
         print(f"   - Linking Person {person_id} to MusicComposition {work.identifier} done.\n")
 
     #####################################
-    # AUDIOOBJECTS
-    # Loop the tracks to create the CE_AudioObject on the CE
+    # MUSIC GROUPS
+    # Loop the Music Groups on all external links to add references for each CE_person
     #####################################
-    for track in tracks:
+    list_music_group_ids = list()
+    for music_group in music_groups:
 
-        track.identifier = await lookupIdentifier("AudioObject", track.source)
+        music_group.identifier = await lookupIdentifier("MusicGroup", music_group.source)
 
-        if track.identifier is not None:
-            print(f"Updating record {track.identifier} in Trompa CE\n")
+        if music_group.identifier is not None:
+            print(f"Updating music group {music_group.identifier} in Trompa CE\n")
 
-            response = await ce.connection.submit_query_async(mutation_update_audioobject(**track.as_dict()))
-            track.identifier = response["data"]["UpdateAudioObject"]["identifier"]
+            response = await ce.connection.submit_query_async(mutation_update_musicgroup(**music_group.as_dict()))
+            music_group.identifier = response["data"]["UpdateMusicGroup"]["identifier"]
+            list_music_group_ids.append(music_group.identifier)
         else:
-            print("Inserting new track {} in Trompa CE\n".format(track.title))
+            print("Inserting new music group {} in Trompa CE\n".format(music_group.name))
 
-            response = await ce.connection.submit_query_async(mutation_create_audioobject(**track.as_dict()))
-            track.identifier = response["data"]["CreateAudioObject"]["identifier"]
+            response = await ce.connection.submit_query_async(mutation_create_musicgroup(**music_group.as_dict()))
 
-    print(f"Importing tracks {track.identifier} done.\n")
+            music_group.identifier = response["data"]["CreateMusicGroup"]["identifier"]
+            list_music_group_ids.append(music_group.identifier)
+
+    if list_music_group_ids:
+        print(f"Importing Music Groups for {key} done.")
 
     #####################################
-    # Linking MUSICCOMPOSITIONS and AUDIOOBJECTS
-    # Loop the musicworks identifiers and link them to audioobjects
+    # Linking MUSIC GROUPS
+    # Loop the music groups identifiers and link them
     #####################################
-    query = mutation_merge_audioobject_exampleofwork(track.identifier, work.identifier)
-    response = await ce.connection.submit_query_async(query)
-    print(f"   - Linking MusicComposition {work.identifier} to AudioObject {track.identifier} done.")
+    for from_id, to_id in itertools.permutations(list_music_group_ids, 2):
+        query = mutation_musicgroup_add_exact_match_musicgroup(from_id, to_id)
+        response = await ce.connection.submit_query_async(query)
+        print(f"   - Linking Music Group {from_id} to Music Group {to_id} done.")
+
+    #####################################
+    # Linking MUSIC GROUPS and MUSICCOMPOSITIONS
+    # Loop the music group identifiers and link them to music compositions
+    #####################################
+    for music_group_id in list_music_group_ids:
+        query = mutation_merge_music_composition_composer(work.identifier, music_group_id)
+        response = await ce.connection.submit_query_async(query)
+        print(f"   - Linking MusicGroup {music_group_id} to MusicComposition {work.identifier} done.\n")
+
+    #####################################
+    # Linking MUSIC GROUPS and PERSONS
+    # Loop the music group identifiers and link them to person identifiers
+    #####################################
+    for music_group_id in list_music_group_ids:
+        for person_id in list_person_ids:
+            query = mutation_merge_musicgroup_member(person_id, music_group_id)
+            response = await ce.connection.submit_query_async(query)
+            print(f"   - Linking Person {person_id} to MusicGroup {music_group_id} done.\n")
 
 
 def get_mw_audio(key: str) -> [CE_AudioObject]:
@@ -173,18 +263,21 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
 
         # Now extract the audio links from the Muziekweb data
         audio_objects = list()
+        music_recordings = list()
         music_works = list()
         persons = list()
+        music_groups = list()
 
         for track in doc.getElementsByTagName('Track'):
 
             trackId = track.getElementsByTagName('AlbumTrackID')[0].firstChild.data
 
             if trackId == key:
+                track_name = track.getElementsByTagName('TrackTitle')[0].firstChild.data
                 # append audio object
                 audio_object = CE_AudioObject(
                     identifier=None,
-                    name=track.getElementsByTagName('TrackTitle')[0].firstChild.data,
+                    name=track_name,
                     url=MW_AUDIO_URL.format(trackId),
                     contributor=GLOBAL_CONTRIBUTOR,
                     creator=GLOBAL_IMPORTER_REPO,
@@ -196,6 +289,21 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
 
                 audio_objects.append(audio_object)
 
+                # append music recording object
+                music_recording = CE_MusicRecording(
+                    identifier=None,
+                    name=track_name,
+                    url=MW_AUDIO_URL.format(trackId),
+                    contributor=GLOBAL_CONTRIBUTOR,
+                    creator=GLOBAL_IMPORTER_REPO,
+                )
+
+                music_recording.title = "Muziekweb - de muziekbibliotheek van Nederland"
+                music_recording.publisher = GLOBAL_PUBLISHER
+                music_recording.description = 'Embed in frame using the following code: <iframe width="300" height="30" src="[url]" frameborder="no" scrolling="no" allowtransparency="true"></iframe>'
+
+                music_recordings.append(music_recording)
+
                 # append musicwork
                 unif_title = track.getElementsByTagName('UniformTitle')[0].attributes['Link'].value
                 unif_text = track.getElementsByTagName('UniformTitle')[0].firstChild.data.replace(' ', '-')
@@ -203,7 +311,7 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
 
                 music_work = CE_MusicComposition(
                     identifier=None,
-                    name=track.getElementsByTagName('TrackTitle')[0].firstChild.data,
+                    name=track_name,
                     url=MW_MUSIC_URL.format(unif_title, unif_style, unif_text),
                     contributor=GLOBAL_CONTRIBUTOR,
                     creator=GLOBAL_IMPORTER_REPO,
@@ -212,134 +320,297 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                 music_work.title = 'Muziekweb - de muziekbibliotheek van Nederland'
                 music_work.contributor = GLOBAL_CONTRIBUTOR
                 music_work.source = MW_MUSIC_URL.format(unif_title, unif_style, unif_text)
-
                 music_works.append(music_work)
                 # append persons
                 perf_link = track.getElementsByTagName('Performer')[0].attributes['Link'].value
                 doc_artist = get_artist_information(perf_link)
-                num_persons = int(doc_artist.getElementsByTagName('ExternalLinks')[0].attributes['Count'].value)
+                num_ext_links = int(doc_artist.getElementsByTagName('ExternalLinks')[0].attributes['Count'].value)
                 perf_name = doc_artist.getElementsByTagName('PresentationName')[0].firstChild.data
                 perf_text = perf_name.replace(' ', '-')
+                # check if person or musicgroup
+                prov_names = [doc_artist.getElementsByTagName('ExternalLink')[pers].attributes['Provider'].value for pers in range(num_ext_links)]
+                artist_type = None
+                if 'MUSICBRAINZ' in prov_names:
+                    ext_link = doc_artist.getElementsByTagName('ExternalLinks')[0].getElementsByTagName('Link')[prov_names.index('MUSICBRAINZ')].firstChild.data
+                    mbid = ext_link.split('/')[-1]
+                    artist = musicbrainz.get_artist_from_musicbrainz(mbid)
+                    artist_type = artist.get('type', None)
 
-                # MW person
+                if artist_type == 'Group':
+                    music_groups, persons = get_music_group_information(doc_artist, music_groups, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
+                else:
+                    persons = get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
+
+        return audio_objects, music_recordings, music_works, persons, music_groups
+
+    return None, None, None, None, None
+
+
+def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style):
+    """
+    """
+    # MW person
+    person = CE_Person(
+        identifier=None,
+        name='{} - Muziekweb'.format(perf_name),
+        url=MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
+        contributor=GLOBAL_CONTRIBUTOR,
+        creator=GLOBAL_IMPORTER_REPO,
+        title='{} - Muziekweb'.format(perf_name),
+        source=MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
+    )
+    persons.append(person)
+
+    # external links
+    for pers in range(num_ext_links):
+
+        prov_name = doc_artist.getElementsByTagName('ExternalLink')[pers].attributes['Provider'].value
+        print('Searching for person: {} - {}'.format(perf_name, prov_name))
+        ext_link = doc_artist.getElementsByTagName('ExternalLinks')[0].getElementsByTagName('Link')[
+            pers].firstChild.data
+        if prov_name == 'ISNI':
+            ext_link = MW_MUSIC_URL.format(perf_link, unif_style, ext_link)
+            ppl = load_person_from_isni(ext_link)
+            person = CE_Person(
+                identifier=None,
+                name=ppl['title'],
+                url=ppl['source'],
+                contributor=ppl['contributor'],
+                creator=GLOBAL_IMPORTER_REPO,
+                title=ppl['title'],
+                source=ppl['source'],
+            )
+        elif prov_name == 'VIAF':
+            ppl = load_person_from_viaf(ext_link)
+            person = CE_Person(
+                identifier=None,
+                name=ppl['title'],
+                url=ppl['source'],
+                contributor=ppl['contributor'],
+                creator=GLOBAL_IMPORTER_REPO,
+                title=ppl['title'],
+                source=ppl['source'],
+            )
+        elif prov_name == 'MUSICBRAINZ':
+            mbid = ext_link.split('/')[-1]
+            ppls = musicbrainz.load_artist_from_musicbrainz(mbid)
+            for ppl in ppls:
                 person = CE_Person(
                     identifier=None,
-                    name='{} - Muziekweb'.format(perf_name),
-                    url=MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
-                    contributor=GLOBAL_CONTRIBUTOR,
+                    name=ppl['title'],
+                    url=ppl['source'],
+                    contributor=ppl['contributor'],
                     creator=GLOBAL_IMPORTER_REPO,
-                    title='{} - Muziekweb'.format(perf_name),
-                    source=MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
+                    title=ppl['title'],
+                    source=ppl['source'],
                 )
+                person.birthPlace = ppl['birthplace']
+                person.birthDate = ppl['birth_date']
+                person.deathPlace = ppl['deathplace']
+                person.deathDate = ppl['death_date']
                 persons.append(person)
 
-                # external links
-                for pers in range(num_persons):
+        elif prov_name == 'WIKIDATA':
+            ppl = load_person_from_wikidata_url(ext_link)
+            person = CE_Person(
+                identifier=None,
+                name=ppl['title'],
+                url=ppl['source'],
+                contributor=ppl['contributor'],
+                creator=GLOBAL_IMPORTER_REPO,
+                title=ppl['title'],
+                source=ppl['source'],
+            )
+            person.description = ppl['description']
+        elif prov_name == 'WIKIPEDIA_EN':
+            en_wiki_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
+            ppl = load_person_from_wikipedia_url(en_wiki_link, 'en')
+            if ppl:
+                person = CE_Person(
+                    identifier=None,
+                    name=ppl['name'],
+                    url=ppl['source'],
+                    contributor=ppl['contributor'],
+                    creator=GLOBAL_IMPORTER_REPO,
+                    title=ppl['title'],
+                    source=ppl['source'],
+                )
+                person.description = ppl['description']
 
-                    prov_name = doc_artist.getElementsByTagName('ExternalLink')[pers].attributes['Provider'].value
-                    print('Searching for person: {} - {}'.format(perf_name, prov_name))
-                    ext_link = doc_artist.getElementsByTagName('ExternalLinks')[0].getElementsByTagName('Link')[
-                        pers].firstChild.data
-                    if prov_name == 'ISNI':
-                        ext_link = MW_MUSIC_URL.format(perf_link, unif_style, ext_link)
-                        ppl = load_person_from_isni(ext_link)
-                        person = CE_Person(
-                            identifier=None,
-                            name=ppl['title'],
-                            url=ppl['source'],
-                            contributor=ppl['contributor'],
-                            creator=GLOBAL_IMPORTER_REPO,
-                            title=ppl['title'],
-                            source=ppl['source'],
-                        )
-                    elif prov_name == 'VIAF':
-                        ppl = load_person_from_viaf(ext_link)
-                        person = CE_Person(
-                            identifier=None,
-                            name=ppl['title'],
-                            url=ppl['source'],
-                            contributor=ppl['contributor'],
-                            creator=GLOBAL_IMPORTER_REPO,
-                            title=ppl['title'],
-                            source=ppl['source'],
-                        )
-                    elif prov_name == 'MUSICBRAINZ':
-                        mbid = ext_link.split('/')[-1]
-                        ppl = load_person_from_musicbrainz(mbid)
-                        person = CE_Person(
-                            identifier=None,
-                            name=ppl['title'],
-                            url=ppl['source'],
-                            contributor=ppl['contributor'],
-                            creator=GLOBAL_IMPORTER_REPO,
-                            title=ppl['title'],
-                            source=ppl['source'],
-                        )
-                        person.birthPlace = ppl['birthplace']
-                        person.birthDate = ppl['birth_date']
-                        person.deathPlace = ppl['deathplace']
-                        person.deathDate = ppl['death_date']
-                    elif prov_name == 'WIKIDATA':
-                        ppl = load_person_from_wikidata(ext_link)
-                        person = CE_Person(
-                            identifier=None,
-                            name=ppl['title'],
-                            url=ppl['source'],
-                            contributor=ppl['contributor'],
-                            creator=GLOBAL_IMPORTER_REPO,
-                            title=ppl['title'],
-                            source=ppl['source'],
-                        )
-                        person.description = ppl['description']
-                    elif prov_name == 'WIKIPEDIA_EN':
-                        en_wiki_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
-                        ppl = load_person_from_wikipedia(en_wiki_link, 'en')
-                        person = CE_Person(
-                            identifier=None,
-                            name=ppl['name'],
-                            url=ppl['source'],
-                            contributor=ppl['contributor'],
-                            creator=GLOBAL_IMPORTER_REPO,
-                            title=ppl['title'],
-                            source=ppl['source'],
-                        )
-                        person.description = ppl['description']
+        elif prov_name == 'WIKIPEDIA_NL':
+            nl_wiki_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
+            ppl = load_person_from_wikipedia_url(nl_wiki_link, 'nl')
+            if ppl:
+                person = CE_Person(
+                    identifier=None,
+                    name=ppl['name'],
+                    url=ppl['source'],
+                    contributor=ppl['contributor'],
+                    creator=GLOBAL_IMPORTER_REPO,
+                    title=ppl['title'],
+                    source=ppl['source'],
+                )
+                person.description = ppl['description']
+        else:
+            if prov_name == 'ALLMUSIC':
+                contributor = 'https://www.allmusic.com/'
+            elif prov_name == 'DISCOGS':
+                contributor = 'https://www.discogs.com/'
+            elif prov_name == 'LASTFM':
+                contributor = 'https://www.last.fm/'
+            else:
+                continue
 
-                    elif prov_name == 'WIKIPEDIA_NL':
-                        nl_wiki_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
-                        ppl = load_person_from_wikipedia(nl_wiki_link, 'nl')
-                        person = CE_Person(
-                            identifier=None,
-                            name=ppl['name'],
-                            url=ppl['source'],
-                            contributor=ppl['contributor'],
-                            creator=GLOBAL_IMPORTER_REPO,
-                            title=ppl['title'],
-                            source=ppl['source'],
-                        )
-                        person.description = ppl['description']
-                    else:
-                        if prov_name == 'ALLMUSIC':
-                            contributor = 'https://www.allmusic.com/'
-                        elif prov_name == 'DISCOGS':
-                            contributor = 'https://www.discogs.com/'
-                        elif prov_name == 'LASTFM':
-                            contributor = 'https://www.last.fm/'
-                        else:
-                            continue
+            person = CE_Person(
+                identifier=None,
+                name='{} - {}'.format(perf_name, prov_name),
+                url=ext_link,
+                contributor=contributor,
+                creator=GLOBAL_IMPORTER_REPO,
+                title='{} - {}'.format(perf_name, prov_name),
+                source=ext_link,
+            )
+        persons.append(person)
+        print('External link: {}'.format(ext_link))
+    return persons
 
-                        person = CE_Person(
-                            identifier=None,
-                            name='{} - {}'.format(perf_name, prov_name),
-                            url=ext_link,
-                            contributor=contributor,
-                            creator=GLOBAL_IMPORTER_REPO,
-                            title='{} - {}'.format(perf_name, prov_name),
-                            source=ext_link,
-                        )
-                    persons.append(person)
-                    print('External link: {}'.format(ext_link))
 
-        return audio_objects, music_works, persons
+def get_music_group_information(doc_artist, music_groups, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style):
+    """
+    """
+    # MW Music Group
+    music_group = CE_MusicGroup(
+        identifier=None,
+        name='{} - Muziekweb'.format(perf_name),
+        url=MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
+        contributor=GLOBAL_CONTRIBUTOR,
+        creator=GLOBAL_IMPORTER_REPO,
+        title='{} - Muziekweb'.format(perf_name),
+        source=MW_MUSIC_URL.format(perf_link, unif_style, perf_text),
+    )
+    music_groups.append(music_group)
 
-    return None
+    # external links
+    for pers in range(num_ext_links):
+        prov_name = doc_artist.getElementsByTagName('ExternalLink')[pers].attributes['Provider'].value
+        print('Searching for music group: {} - {}'.format(perf_name, prov_name))
+        ext_link = doc_artist.getElementsByTagName('ExternalLinks')[0].getElementsByTagName('Link')[
+            pers].firstChild.data
+        if prov_name == 'ISNI':
+            ext_link = MW_MUSIC_URL.format(perf_link, unif_style, ext_link)
+            ppl = load_person_from_isni(ext_link)
+            music_group = CE_MusicGroup(
+                identifier=None,
+                name=ppl['title'],
+                url=ppl['source'],
+                contributor=ppl['contributor'],
+                creator=GLOBAL_IMPORTER_REPO,
+                title=ppl['title'],
+                source=ppl['source'],
+            )
+        elif prov_name == 'VIAF':
+            ppl = load_person_from_viaf(ext_link)
+            music_group = CE_MusicGroup(
+                identifier=None,
+                name=ppl['title'],
+                url=ppl['source'],
+                contributor=ppl['contributor'],
+                creator=GLOBAL_IMPORTER_REPO,
+                title=ppl['title'],
+                source=ppl['source'],
+            )
+        elif prov_name == 'MUSICBRAINZ':
+            mbid = ext_link.split('/')[-1]
+
+            ppls = musicbrainz.load_artist_from_musicbrainz(mbid)
+            ppl = ppls[0]
+            music_group = CE_MusicGroup(
+                identifier=None,
+                name=ppl['title'],
+                url=ppl['source'],
+                contributor=ppl['contributor'],
+                creator=GLOBAL_IMPORTER_REPO,
+                title=ppl['title'],
+                source=ppl['source'],
+            )
+
+            for ppl in ppls[1:]:
+                person = CE_Person(
+                    identifier=None,
+                    name=ppl['title'],
+                    url=ppl['source'],
+                    contributor=ppl['contributor'],
+                    creator=GLOBAL_IMPORTER_REPO,
+                    title=ppl['title'],
+                    source=ppl['source'],
+                )
+                person.birthPlace = ppl['birthplace']
+                person.birthDate = ppl['birth_date']
+                person.deathPlace = ppl['deathplace']
+                person.deathDate = ppl['death_date']
+                persons.append(person)
+
+        elif prov_name == 'WIKIDATA':
+            ppl = load_person_from_wikidata_url(ext_link)
+            music_group = CE_MusicGroup(
+                identifier=None,
+                name=ppl['title'],
+                url=ppl['source'],
+                contributor=ppl['contributor'],
+                creator=GLOBAL_IMPORTER_REPO,
+                title=ppl['title'],
+                source=ppl['source'],
+            )
+            music_group.description = ppl['description']
+        elif prov_name == 'WIKIPEDIA_EN':
+            en_wiki_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
+            ppl = load_person_from_wikipedia_url(en_wiki_link, 'en')
+            if ppl:
+                music_group = CE_MusicGroup(
+                    identifier=None,
+                    name=ppl['name'],
+                    url=ppl['source'],
+                    contributor=ppl['contributor'],
+                    creator=GLOBAL_IMPORTER_REPO,
+                    title=ppl['title'],
+                    source=ppl['source'],
+                )
+                music_group.description = ppl['description']
+
+        elif prov_name == 'WIKIPEDIA_NL':
+            nl_wiki_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
+            ppl = load_person_from_wikipedia_url(nl_wiki_link, 'nl')
+            if ppl:
+                music_group = CE_MusicGroup(
+                    identifier=None,
+                    name=ppl['name'],
+                    url=ppl['source'],
+                    contributor=ppl['contributor'],
+                    creator=GLOBAL_IMPORTER_REPO,
+                    title=ppl['title'],
+                    source=ppl['source'],
+                )
+                music_group.description = ppl['description']
+        else:
+            if prov_name == 'ALLMUSIC':
+                contributor = 'https://www.allmusic.com/'
+            elif prov_name == 'DISCOGS':
+                contributor = 'https://www.discogs.com/'
+            elif prov_name == 'LASTFM':
+                contributor = 'https://www.last.fm/'
+            else:
+                continue
+
+            music_group = CE_MusicGroup(
+                identifier=None,
+                name='{} - {}'.format(perf_name, prov_name),
+                url=ext_link,
+                contributor=contributor,
+                creator=GLOBAL_IMPORTER_REPO,
+                title='{} - {}'.format(perf_name, prov_name),
+                source=ext_link,
+            )
+        music_groups.append(music_group)
+        print('External link: {}'.format(ext_link))
+
+    return music_groups, persons

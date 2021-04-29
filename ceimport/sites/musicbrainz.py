@@ -15,14 +15,52 @@ VIAF_REL = 'e8571dcc-35d4-4e91-a577-a3382fd84460'
 WIKIDATA_REL = '689870a4-a1e4-4912-b17f-7b2664215698'
 IMSLP_REL = '8147b6a2-ad14-4ce7-8f0a-697f9a31f68f'
 
-# Indicates that an artist was the composer of a work
+# Indicates that an artist gwas the composer of a work
 COMPOSER_REL = 'd59d99ea-23d4-4a80-b066-edca32ee158f'
 # Indicates that a work is a subpart of another work
 PARTS_REL = 'ca8d3642-ce5f-49f8-91f2-125d72524e6a'
 
 
-def load_person_from_musicbrainz(artist_mbid):
-    artist = mb.get_artist_by_id(artist_mbid)['artist']
+def get_artist_from_musicbrainz(artist_mbid):
+    """
+    """
+    artist = mb.get_artist_by_id(artist_mbid, includes=['artist-rels'])['artist']
+
+    return artist
+
+
+def load_artist_from_musicbrainz(artist_mbid):
+    """
+    """
+    artist = get_artist_from_musicbrainz(artist_mbid)
+    artist_type = artist.get('type', None)
+    if artist_type == 'Group':
+        artists = load_group_from_musicbrainz(artist)
+    else:
+        artists = [load_person_from_musicbrainz(artist)]
+
+    return artists
+
+
+def load_group_from_musicbrainz(artist):
+    """
+    """
+    artist_relations = artist.get('artist-relation-list', [])
+    # Add as first element the group entity itself
+    members = [load_person_from_musicbrainz(artist)]
+    for relation in artist_relations:
+        if relation['type-id'] == '5be4c609-9afa-4ea0-910b-12ffb71e3821':
+            member = relation.get('artist', {})
+            member = mb.get_artist_by_id(member['id'])['artist']
+            mb_person = load_person_from_musicbrainz(member)
+            members.append(mb_person)
+
+    return members
+
+
+def load_person_from_musicbrainz(artist):
+    """
+    """
     name = artist['name']
 
     '''TODO: add these items?
@@ -32,7 +70,7 @@ def load_person_from_musicbrainz(artist_mbid):
         'honorificPrefix': honorific_prefix,
         'honorificSuffix': honorific_suffix,
         'jobTitle': job_title
-        
+
     Other biblio info? Places, birth date, death date, gender
     language
     If there are aliases in our languages, import them with those languages
@@ -49,14 +87,22 @@ def load_person_from_musicbrainz(artist_mbid):
     born = died = None
     if lifespan:
         born = lifespan.get('begin')
+        # This check is for cases where date format from MusiBrainz
+        # is not correct
+        if born:
+            if not all([False for x in born.split("-") if not x.isdigit()]):
+                born = None
         died = lifespan.get('end')
+        if died:
+            if not all([False for x in died.split("-") if not x.isdigit()]):
+                died = None
 
     return {
         # This is the title of the page, so it includes the header
         'title': f'{name} - MusicBrainz',
         'name': name,
         'contributor': 'https://musicbrainz.org',
-        'source': f'https://musicbrainz.org/artist/{artist_mbid}',
+        'source': f'https://musicbrainz.org/artist/{artist["id"]}',
         'format_': 'text/html',
         'language': 'en',
         'birth_date': born,

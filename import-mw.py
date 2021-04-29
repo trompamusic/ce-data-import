@@ -84,21 +84,26 @@ if __name__ == "__main__":
     if mw_api_user is not None and mw_api_pass is not None:
         set_api_account(mw_api_user, mw_api_pass)
 
-    # Import Muziekweb artists into the Trompa CE
-    # asyncio for python >= 3.8
-    if sys.version_info[0] == 3 and sys.version_info[1] >= 8:
-        # if source_artist is not None:
-        #     asyncio.run(import_artist(source_artist))
-        # elif source_release is not None:
-        #     asyncio.run(import_album(source_release))
-        # elif source_track is not None:
-        asyncio.run(import_tracks(source_track))
-    else:
-        # asyncio for python < 3.7
-        loop = asyncio.get_event_loop()
-        # if source_artist is not None:
-        #     result = loop.run_until_complete(import_artist(source_artist))
-        # elif source_release is not None:
-        #     result = loop.run_until_complete(import_album(source_release))
-        # elif source_track is not None:
-        result = loop.run_until_complete(import_tracks(source_track))
+    tracks = readKeys(source_track)
+    for track in tracks:
+        # Import Muziekweb artists into the Trompa CE
+        # asyncio for python >= 3.8
+        if sys.version_info[0] == 3 and sys.version_info[1] >= 8:
+            # if source_artist is not None:
+            #     asyncio.run(import_artist(source_artist))
+            # elif source_release is not None:
+            #     asyncio.run(import_album(source_release))
+            # elif source_track is not None:
+            asyncio.run(import_tracks(track))
+        else:
+            # asyncio for python < 3.7
+            loop = asyncio.get_event_loop()
+            # if source_artist is not None:
+            #     result = loop.run_until_complete(import_artist(source_artist))
+            # elif source_release is not None:
+            #     result = loop.run_until_complete(import_album(source_release))
+            # elif source_track is not None:
+            result = loop.run_until_complete(import_tracks(track))
+
+        print('Import track {} COMPLETED'.format(track))
+        print('--------------------------------------\n')

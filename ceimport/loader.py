@@ -47,10 +47,10 @@ def load_artist_from_musicbrainz(artist_mbid):
         isni_person = isni.load_person_from_isni(isni_url)
         persons.append(isni_person)
     if 'wikidata' in rels:
-        wd_person = wikidata.load_person_from_wikidata(rels['wikidata'])
+        wd_person = wikidata.load_person_from_wikidata_url(rels['wikidata'])
         if wd_person:
             persons.append(wd_person)
-        wp_person = wikidata.load_wikipedia_person_from_wikidata(rels['wikidata'], 'en')
+        wp_person = wikidata.load_person_from_wikipedia_wikidata_url(rels['wikidata'], 'en')
         if wp_person:
             persons.append(wp_person)
 
@@ -294,10 +294,10 @@ def load_artist_from_imslp(url):
     if 'wikipedia' in rels:
         wikidata_id = wikidata.get_wikidata_id_from_wikipedia_url(rels['wikipedia'])
         if wikidata_id:
-            wd_person = wikidata.load_person_from_wikidata(rels['wikidata'])
+            wd_person = wikidata.load_person_from_wikidata_url(rels['wikidata'])
             if wd_person:
                 people.append(wd_person)
-            wp_person = wikidata.load_person_from_wikidata(rels['wikidata'], 'en')
+            wp_person = wikidata.load_person_from_wikipedia_wikidata_url(rels['wikidata'], 'en')
             if wp_person:
                 people.append(wp_person)
     if 'musicbrainz' in rels:
