@@ -301,8 +301,10 @@ def load_artist_from_imslp(url):
             if wp_person:
                 people.append(wp_person)
     if 'musicbrainz' in rels:
-        mb_person = musicbrainz.load_person_from_musicbrainz(rels['musicbrainz'])
-        people.append(mb_person)
+        # TODO: This is broken
+        pass
+        # mb_person = musicbrainz.load_person_from_musicbrainz(rels['musicbrainz'])
+        # people.append(mb_person)
     if 'isni' in rels:
         isni_person = isni.load_person_from_isni(rels['isni'])
         people.append(isni_person)
@@ -403,7 +405,7 @@ def load_musiccomposition_from_imslp_name(imslp_name, load_files=True):
             link_musiccomposition_exactmatch([composition_id, mb_work_ceid])
 
         if not load_files:
-            return
+            return composition_id
 
         wikitext = imslp.get_wiki_content_for_pages([imslp_name])
         files = imslp.files_for_work(wikitext[0])
@@ -442,6 +444,8 @@ def load_musiccomposition_from_imslp_name(imslp_name, load_files=True):
                     # TODO: We should check if this is the case all the time.
                     link_mediaobject_was_derived_from(source_id=xmlmediaobject_ceid,
                                                       derived_id=pdfmediaobject_ceid)
+
+        return composition_id
     else:
         logger.info(" - No composer??, skipping")
 

@@ -67,3 +67,15 @@ def get_artist_information(key: str):
             return minidom.parseString(body)
 
     return None
+
+
+def get_work(work_id: str):
+    if _api_activated:
+        response = urllib.request.urlopen(f"{MW_API_HOST}/ExtendedInfo/v3/uniformTitleInfo.xml?uniformTitleLink={work_id}")
+        body = response.read()
+
+        if len(body) > 0:
+            # Return the xml as object
+            return minidom.parseString(body)
+
+    return None

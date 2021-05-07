@@ -5,8 +5,7 @@ import itertools
 
 import trompace as ce
 from trompace.connection import submit_query
-from trompace.mutations.audioobject import mutation_update_audioobject, mutation_create_audioobject, \
-    mutation_merge_audioobject_exampleofwork
+from trompace.mutations.audioobject import mutation_update_audioobject, mutation_create_audioobject
 from trompace.mutations.musiccomposition import mutation_update_music_composition, mutation_create_music_composition, \
     mutation_merge_music_composition_composer, mutation_merge_music_composition_recorded_as
 from trompace.mutations.person import mutation_update_person, mutation_create_person, \
@@ -18,7 +17,6 @@ from trompace.mutations.musicrecording import mutation_create_musicrecording, \
     mutation_update_musicrecording, mutation_merge_music_recording_audio
 
 from ceimport.sites.isni import load_person_from_isni
-# from ceimport.sites.musicbrainz import load_person_data_from_musicbrainz
 from ceimport.sites import musicbrainz
 from ceimport.sites.viaf import load_person_from_viaf
 from ceimport.sites.wikidata import load_person_from_wikidata_url, load_person_from_wikipedia_url
@@ -337,18 +335,19 @@ def get_mw_audio_1track(key: str) -> [CE_AudioObject]:
                     artist_type = artist.get('type', None)
 
                 if artist_type == 'Group':
-                    music_groups, persons = get_music_group_information(doc_artist, music_groups, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
+                    music_groups, persons = get_music_group_information(doc_artist, music_groups, num_ext_links, perf_name, perf_link, perf_text, unif_style)
                 else:
-                    persons = get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style)
+                    persons = get_person_information(doc_artist, perf_name, perf_link, perf_text, unif_style)
 
         return audio_objects, music_recordings, music_works, persons, music_groups
 
     return None, None, None, None, None
 
 
-def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style):
+def get_person_information(doc_artist, perf_name, perf_link, perf_text, unif_style):
     """
     """
+    persons = []
     # MW person
     person = CE_Person(
         identifier=None,
@@ -362,12 +361,11 @@ def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_l
     persons.append(person)
 
     # external links
-    for pers in range(num_ext_links):
-
-        prov_name = doc_artist.getElementsByTagName('ExternalLink')[pers].attributes['Provider'].value
+    external_links = doc_artist.getElementsByTagName('ExternalLink')
+    for external in external_links:
+        prov_name = external.attributes['Provider'].value
         print('Searching for person: {} - {}'.format(perf_name, prov_name))
-        ext_link = doc_artist.getElementsByTagName('ExternalLinks')[0].getElementsByTagName('Link')[
-            pers].firstChild.data
+        ext_link = external.getElementsByTagName("Link")[0].firstChild.nodeValue
         if prov_name == 'ISNI':
             ext_link = MW_MUSIC_URL.format(perf_link, unif_style, ext_link)
             ppl = load_person_from_isni(ext_link)
@@ -380,6 +378,7 @@ def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_l
                 title=ppl['title'],
                 source=ppl['source'],
             )
+            persons.append(person)
         elif prov_name == 'VIAF':
             ppl = load_person_from_viaf(ext_link)
             person = CE_Person(
@@ -391,6 +390,7 @@ def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_l
                 title=ppl['title'],
                 source=ppl['source'],
             )
+            persons.append(person)
         elif prov_name == 'MUSICBRAINZ':
             mbid = ext_link.split('/')[-1]
             ppls = musicbrainz.load_artist_from_musicbrainz(mbid)
@@ -422,6 +422,7 @@ def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_l
                 source=ppl['source'],
             )
             person.description = ppl['description']
+            persons.append(person)
         elif prov_name == 'WIKIPEDIA_EN':
             en_wiki_link = 'https://en.wikipedia.org/wiki/{}'.format(ext_link)
             ppl = load_person_from_wikipedia_url(en_wiki_link, 'en')
@@ -436,7 +437,7 @@ def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_l
                     source=ppl['source'],
                 )
                 person.description = ppl['description']
-
+                persons.append(person)
         elif prov_name == 'WIKIPEDIA_NL':
             nl_wiki_link = 'https://nl.wikipedia.org/wiki/{}'.format(ext_link)
             ppl = load_person_from_wikipedia_url(nl_wiki_link, 'nl')
@@ -451,6 +452,7 @@ def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_l
                     source=ppl['source'],
                 )
                 person.description = ppl['description']
+                persons.append(person)
         else:
             if prov_name == 'ALLMUSIC':
                 contributor = 'https://www.allmusic.com/'
@@ -470,14 +472,15 @@ def get_person_information(doc_artist, persons, num_ext_links, perf_name, perf_l
                 title='{} - {}'.format(perf_name, prov_name),
                 source=ext_link,
             )
-        persons.append(person)
+            persons.append(person)
         print('External link: {}'.format(ext_link))
     return persons
 
 
-def get_music_group_information(doc_artist, music_groups, persons, num_ext_links, perf_name, perf_link, perf_text, unif_style):
+def get_music_group_information(doc_artist, music_groups, num_ext_links, perf_name, perf_link, perf_text, unif_style):
     """
     """
+    persons = []
     # MW Music Group
     music_group = CE_MusicGroup(
         identifier=None,

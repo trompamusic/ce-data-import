@@ -2,6 +2,7 @@
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 from . import CE_BaseModel, Person
 
@@ -14,7 +15,7 @@ class CE_Person(Person, CE_BaseModel):
     Inherits from schema.org Person
     """
 
-    def __init__(self, identifier: str, name: str, url: str, contributor: str, creator: str, title: str, source: str):
+    def __init__(self, identifier: Optional[str], name: str, url: str, contributor: str, creator: str, title: str, source: str):
         CE_BaseModel.__init__(self, identifier, name, url, contributor, creator)
         self.title = title
         self.source = source
