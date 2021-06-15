@@ -23,11 +23,31 @@ It also imports basic identifiers for the following sources
 
 ## Running the application
 
+To configure the importer to point to a specific Contributor Environment, set
+the `TROMPACE_CLIENT_CONFIG` environment variable to the path of a configuration
+file for `trompace-client`:
+
+    export TROMPACE_CLIENT_CONFIG=trompace.ini
+
 The main entrypoint is `ceimport.cli`. Use
 
     python -m ceimport.cli
 
 to get a list of imports that can be performed.
+
+To get detailed documentation about a particular importer, user the help flag:
+
+    $ python -m ceimport.cli cpdl-import-work --help
+
+    Usage: python -m ceimport.cli cpdl-import-work [OPTIONS]
+
+      Import the given work (--url x) or file of works (--file f). Works need to
+      be wiki titles (no http://.... and no _ to split words.
+
+    Options:
+      --file TEXT
+      --url TEXT
+      --help       Show this message and exit.
 
 ### Muziekweb
 
