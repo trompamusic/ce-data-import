@@ -1,9 +1,8 @@
-TODAY := $(shell date +'%Y-%m-%d')
 build:
-	docker build -t mtgupf/verovio:$(TODAY) .
+	docker build -t mtgupf/verovio:latest .
 
 push:
-	docker push mtgupf/verovio:$(TODAY)
+	docker push mtgupf/verovio:latest
 
 all: build push
 

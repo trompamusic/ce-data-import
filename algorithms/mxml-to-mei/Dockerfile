@@ -1,4 +1,4 @@
-FROM mtgupf/verovio:2021-04-23 as verovio
+FROM mtgupf/verovio:latest as verovio
 
 FROM ubuntu:20.04
 
@@ -19,7 +19,7 @@ WORKDIR /code
 
 COPY requirements.txt /code
 RUN pip3 install --no-cache-dir -r requirements.txt
-RUN pip3 install --no-cache-dir ipython 'jedi<0.18'
+RUN pip3 install --no-cache-dir ipython
 
 COPY . /code
 
