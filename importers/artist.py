@@ -1,81 +1,55 @@
 """
 Muziekweb artist importer
 """
-from typing import Optional
+import itertools
 
-import trompace as ce
-from SPARQLWrapper import SPARQLWrapper, JSON
-from trompace.connection import submit_query
-from trompace.mutations.person import mutation_update_person, mutation_create_person
+import trompace.connection
+from trompace.mutations.person import mutation_create_person, \
+    mutation_person_add_exact_match_person
 
-from models import CE_Person
-from trompace_local import GLOBAL_CONTRIBUTOR, GLOBAL_IMPORTER_REPO, GLOBAL_PUBLISHER, lookupIdentifier
+import muziekweb_api
+from importers.audio_object import get_person_information
 
 
-async def import_artist(keys: list):
+def import_artist(artist_id: str):
+    """Import an artist from Muziekweb and import it to the CE. If the com
+    Returns a dictionary:
+        {"musiccomposition_id": musiccomp_ceid,
+         "person_ids": composer_ids}
+    TODO: This code is duplicated in audio_object.import_tracks, and should be abstracted out
     """
-    Imports artists from Muziekweb for all given keys into the Trompa CE.
+    persons = get_artist(artist_id)
+
+    list_person_ids = []
+    for person in persons:
+        print("Inserting new person {} in Trompa CE\n".format(person.name))
+
+        response = trompace.connection.submit_query(mutation_create_person(**person.as_dict()), auth_required=True)
+
+        person.identifier = response["data"]["CreatePerson"]["identifier"]
+        list_person_ids.append(person.identifier)
+
+    for from_id, to_id in itertools.permutations(list_person_ids, 2):
+        query = mutation_person_add_exact_match_person(from_id, to_id)
+        response = trompace.connection.submit_query(query, auth_required=True)
+        print(f"   - Linking Person {from_id} to Person {to_id} done.")
+
+    # Return CE ID of the muziekweb Person
+    mw_person = [p for p in persons if p.contributor == "https://www.muziekweb.nl"]
+    if mw_person:
+        return mw_person[0]
+    else:
+        return None
+
+
+def get_artist(artist_id: str):
+    """Query muziekweb api and parse result
+    TODO: This code currently skips the check for the artist being a group
     """
-    for key in keys:
-        print(f"Retrieving artist with key {key} from Muziekweb")
-        # Get data from Muziekweb
-        artist = await get_mw_artist(key)
+    artist = muziekweb_api.get_artist_information(artist_id)
+    perf_name = artist.getElementsByTagName('PresentationName')[0].firstChild.data
+    perf_text = perf_name.replace(' ', '-')
+    unif_style = artist.getElementsByTagName('Catalogue')[0].firstChild.data.split(' ')[0]
+    persons = get_person_information(artist, perf_name, artist_id, perf_text, unif_style)
+    return persons
 
-        if artist is None:
-            print(f"No data received for {key}")
-            continue
-
-        artist.identifier = await lookupIdentifier("Person", artist.source)
-
-        if artist.identifier is not None:
-            print(f"Updating record {artist.identifier} in Trompa CE", end="")
-            response = await ce.connection.submit_query(mutation_update_person(**artist.as_dict()))
-            artist.identifier = response["data"]["UpdatePerson"]["identifier"]
-        else:
-            print("Inserting new record in Trompa CE", end="")
-            response = await ce.connection.submit_query(mutation_create_person(**artist.as_dict()))
-            artist.identifier = response["data"]["CreatePerson"]["identifier"]
-
-        if artist.identifier is None:
-            print(" - failed.")
-        else:
-            print(" - success.")
-
-    print("Importing artists done.")
-
-
-async def get_mw_artist(key: str) -> Optional[CE_Person]:
-    sparql = SPARQLWrapper(
-        "https://api.data.muziekweb.nl/datasets/muziekweborganization/Muziekweb/services/Muziekweb/sparql")
-    sparql.setReturnFormat(JSON)
-    qry = f"""PREFIX schema: <http://schema.org/>
-    PREFIX vocab: <https://data.muziekweb.nl/vocab/>
-    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-    select ?url ?name ?birthYear ?deathYear where {{
-        BIND(<https://data.muziekweb.nl/Link/{key}> as ?url)
-        ?url vocab:beginYear ?birthYear;
-            vocab:endYear ?deathYear;
-            rdfs:label ?name.
-    }}"""
-    sparql.setQuery(qry)
-
-    result = sparql.query().convert()["results"]["bindings"]
-
-    if len(result) > 0:
-        # Now get Muziekweb data
-        person = CE_Person(
-            identifier=None,
-            name=result[0]["name"]["value"],
-            url=result[0]["url"]["value"],
-            contributor=GLOBAL_CONTRIBUTOR,
-            creator=GLOBAL_IMPORTER_REPO,
-        )
-
-        person.publisher = GLOBAL_PUBLISHER
-        person.description = None
-        person.birthDate = result[0]["birthYear"]["value"]
-        person.deathDate = result[0]["deathYear"]["value"]
-
-        return person
-
-    return None
